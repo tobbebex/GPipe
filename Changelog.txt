@@ -1,0 +1,52 @@
+1.0.1:
+
+* Textures should now work on OpenGl 2.1 (required OpenGl 3.x previously). Thanks to Jake for the bug report.
+
+ 
+1.0.2:
+
+* Removed rasterize and made rasterizeFront work for other primitives than triangles instead.
+
+* Added some default opengl states
+
+* Fixed notB implementation
+
+
+1.1.0:
+
+* Improved performance by factor 2.73
+
+1.1.1:
+
+* 4 byte row alignment 
+
+1.1.2:
+
+* Fixed version trouble
+
+1.1.3:
+
+* Fixed space leak
+
+1.1.4:
+
+* Improved support for some GPUs
+
+1.1.7:
+
+* GHC 6.12 support
+
+1.2.0:
+
+* Added important optimization for most use cases
+
+* Added size parameter to window update in newWindow
+
+* Added cabal flag containers03
+
+1.2.1:
+
+* Fixed error on certain platforms
+
+* Incread version on Vec dependency
+
