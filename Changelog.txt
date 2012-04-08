@@ -50,3 +50,12 @@
 
 * Incread version on Vec dependency
 
+1.3:
+
+* Various bugfixes and updating to latest libraries
+
+1.3.1;
+
+* Updating to latest libs
+
+* Using LANGUAGE pragmas instead of cabal file

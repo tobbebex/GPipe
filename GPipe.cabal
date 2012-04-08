@@ -1,6 +1,6 @@
 name: GPipe
-version: 1.3
-cabal-version: >= 1.2.3
+version: 1.3.1
+cabal-version: >= 1.8
 build-type: Simple
 license: BSD3
 copyright: Tobias Bexelius
@@ -9,7 +9,7 @@ maintainer: Tobias Bexelius
 stability: Experimental
 homepage: http://www.haskell.org/haskellwiki/GPipe
 package-url: http://hackage.haskell.org/package/GPipe
-bug-reports: mailto:tobias_bexelius@hotmail.com
+bug-reports: https://github.com/tobbebex/GPipe/issues
 synopsis: A functional graphics API for programmable GPUs
 description: GPipe models the entire graphics pipeline in a purely functional, immutable and typesafe way. It is built on top of the programmable pipeline (i.e. non-fixed function) of
              OpenGL 2.1 and uses features such as vertex buffer objects (VBO's), texture objects and GLSL shader code synthetisation to create fast graphics programs. Buffers,
@@ -17,50 +17,38 @@ description: GPipe models the entire graphics pipeline in a purely functional, i
              instances of GPipes classes, it's possible to use additional datatypes on the GPU.
              .
              You'll need full OpenGL 2.1 support, including GLSL 1.20 to use GPipe. Thanks to OpenGLRaw, you may still build GPipe programs on machines lacking this support.
-             .
-             Note on installation: If you have cabal installed list-tries with flag containers03 (you should) then use the same flag when installing GPipe. This flag is false by default since it's
-             false for list-tries as well, and I want Hackage to be able to build it.
              
 category: Graphics
 author: Tobias Bexelius
 
-Flag containers03
-   Default: False
 
 Library
-    build-depends: containers >= 0.3 && < 0.4, 
-                    mtl -any, 
-                    list-tries >= 0.4 && < 0.5,
-                    GLUT ==2.2.2.0,
-                    OpenGL ==2.4.0.1,
+    build-depends: 
+                    containers >= 0.4 && <0.5,
+                    list-tries >= 0.4.1 && < 0.5,
+                    GLUT >=2.1.2.1,
+                    OpenGL >=2.2.3.0,
                     Boolean == 0.0.1,
-                    Vec == 0.9.7, 
-                    Vec-Boolean == 1.0.3,
-                    base >= 3 && < 5
+                    Vec == 0.9.8,
+                    Vec-Boolean == 1.0.4,
+                    base >= 4,
+                    transformers
                        
-    exposed-modules: Graphics.GPipe
-                     Graphics.GPipe.Stream
-                     Graphics.GPipe.Stream.Primitive
-                     Graphics.GPipe.Stream.Fragment
-                     Graphics.GPipe.FrameBuffer
-                     Graphics.GPipe.Texture
-                     Graphics.GPipe.Format
-    other-modules: Formats 
-                   GPUStream 
-                   InputAssembler 
-                   OutputMerger
-                   Rasterizer 
-                   Resources 
-                   Shader 
+    other-modules: 
+                   Formats,
+                   GPUStream,
+                   InputAssembler,
+                   OutputMerger,
+                   Rasterizer,
+                   Resources,
+                   Shader,
                    Textures
-    extensions: ParallelListComp
-                MultiParamTypeClasses
-                NoMonomorphismRestriction 
-                ScopedTypeVariables 
-                FlexibleContexts
-                FlexibleInstances 
-                EmptyDataDecls 
-                GeneralizedNewtypeDeriving
-                TypeFamilies 
-                TypeOperators
     hs-source-dirs: src
+    exposed-modules:
+                    Graphics.GPipe,
+                    Graphics.GPipe.Format,
+                    Graphics.GPipe.FrameBuffer,
+                    Graphics.GPipe.Stream,
+                    Graphics.GPipe.Stream.Fragment,
+                    Graphics.GPipe.Stream.Primitive,
+                    Graphics.GPipe.Texture

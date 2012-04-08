@@ -1,3 +1,4 @@
+{-# LANGUAGE TypeOperators, TypeFamilies, FlexibleInstances, MultiParamTypeClasses #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  Shader
@@ -33,6 +34,7 @@ module Shader (
     module Data.Boolean
 ) where
 
+import Control.Monad.Trans.State.Lazy (put, get, StateT, runStateT)
 import System.IO.Unsafe
 import Data.Vec ((:.)(..), Vec2, Vec3, Vec4, norm, normalize, dot, cross)
 import qualified Data.Vec as Vec
@@ -40,7 +42,6 @@ import Data.Unique
 import Data.List
 import Data.Maybe
 import Data.Boolean
-import Control.Monad.State
 import Data.Map (Map)
 import qualified Data.Map as Map hiding (Map)
 import qualified Data.HashTable as HT
@@ -266,7 +267,7 @@ class (Ord a, Floating a) => Real' a where
   rsqrt = (1/) . sqrt
   exp2 = (2**)
   log2 = logBase 2
-  clamp x a b = min (max x a) b
+  clamp x a = min (max x a)
   saturate x = clamp x 0 1
   mix x y a = x*(1-a)+y*a
   step a x | x < a     = 0
@@ -543,7 +544,7 @@ extractUniforms (_,xs) = foldl' extractUniform ([],[],[],Map.empty) $ reverse $ 
           extractUniform x _ = x  
 
 extractInputs :: ShaderDAG -> [Int]
-extractInputs (_,xs) = IntSet.toAscList $ foldl' extractIn (IntSet.empty) $ map fst xs
+extractInputs (_,xs) = IntSet.toAscList $ foldl' extractIn IntSet.empty $ map fst xs
     where extractIn s (ShaderInput a) = IntSet.insert a s
           extractIn x _ = x  
 
@@ -562,8 +563,7 @@ getCodeAssignments inF numIns inName (_,xs) = concat $ snd $ mapAccumL getCode (
           getCode x@(_,inlns) (n, (ShaderOp _ f _, xs)) = (x, f (var n) (map (varMaybeInline inlns) xs))
           getCode _ (_, (ShaderInputTree _, _)) = error "Shader.getCodeAssignments: Use splitShaders first!"
           var n = 't' : show n
-          varMaybeInline inlns n = case Map.lookup n inlns of Just str -> str
-                                                              Nothing -> var n
+          varMaybeInline inlns n = fromMaybe (var n) (Map.lookup n inlns)
 
 inoutAccessor i tot = case divMod i 4 of (d,m) -> if i+1 == tot && m == 0 then show d else show d ++ "." ++ (["x","y","z","w"]!!m)
 

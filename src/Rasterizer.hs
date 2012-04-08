@@ -1,3 +1,4 @@
+{-# LANGUAGE TypeOperators, TypeFamilies, FlexibleInstances, GeneralizedNewtypeDeriving #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  Rasterizer
@@ -23,7 +24,7 @@ module Rasterizer (
 import Shader
 import Data.Vec ((:.)(..), Vec2, Vec3, Vec4)
 import GPUStream
-import Control.Monad.Identity
+import Data.Functor.Identity
 
 -- | A monad in which vertex data gets converted to fragment data.
 --   Use 'toFragment' in the existing instances of 'VertexOutput' to operate in this monad.

@@ -60,7 +60,6 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import System.Mem.StableName
 import Data.Bits
-import Control.Monad.Reader
 import Control.Monad
 import Foreign.C.Types
 import Foreign.Storable
@@ -77,6 +76,8 @@ import Data.Unique
 import Data.ListTrie.Patricia.Map (TrieMap)
 import qualified Data.ListTrie.Patricia.Map as TrieMap
 import Data.ListTrie.Base.Map (WrappedIntMap)
+import Control.Monad.Trans.Reader
+import Control.Monad.IO.Class
 
 data VertexBuffer = VertexBuffer BufferObject Int
 data IndexBuffer = IndexBuffer BufferObject Int DataType
@@ -123,7 +124,7 @@ type ProgramCache = IORef ProgramCacheMap -- (Map (ShaderKey, ShaderKey) (Progra
 pCacheLookup :: ShaderKey -> ShaderKey -> ProgramCacheMap -> Maybe ProgramCacheValue
 pCacheLookup (k3, k1) (k4, k2) m1 = TrieMap.lookup k1 m1 >>= TrieMap.lookup k2 >>= TrieMap.lookup k3 >>= TrieMap.lookup k4
 pCacheInsert :: ShaderKey -> ShaderKey -> ProgramCacheValue -> ProgramCacheMap -> ProgramCacheMap 
-pCacheInsert (k3, k1) (k4, k2) v m1 = TrieMap.alter' ins2 k1 m1
+pCacheInsert (k3, k1) (k4, k2) v = TrieMap.alter' ins2 k1
     where ins2 Nothing   = Just $ TrieMap.singleton k2 $ TrieMap.singleton k3 $ TrieMap.singleton k4 v
           ins2 (Just m2) = Just $ TrieMap.alter' ins3 k2 m2
           ins3 Nothing   = Just $ TrieMap.singleton k3 $ TrieMap.singleton k4 v
@@ -179,7 +180,7 @@ createProgramResource vkey vstr fkey fstr s = do
                                                  fs <- createShaderResource fstr
                                                  attachedShaders p $= ([vs],[fs])
                                                  mapM_
-                                                     (\i -> attribLocation p ("v" ++ show i) $= AttribLocation i)
+                                                     (\i -> attribLocation p ('v' : show i) $= AttribLocation i)
                                                      [0..fromIntegral ((s-1) `div` 4)]
                                                  linkProgram p
                                                  b <- get $ linkStatus p
@@ -245,7 +246,7 @@ createIndexBuffer xs vs = do cache <- asks ibCache
                                                     withArray (map fromIntegral  xs :: [CUShort]) (\p -> bufferData ElementArrayBuffer $= (fromIntegral $ sizeOf (0 :: CFloat) * length xs, p, StaticDraw))
                                                     return $ IndexBuffer b (length xs) UnsignedShort
                                                  else do
-                                                    withArray (map fromIntegral  xs :: [CUChar]) (\p -> bufferData ElementArrayBuffer $= (fromIntegral $ (sizeOf (0 :: CFloat)) * length xs, p, StaticDraw))
+                                                    withArray (map fromIntegral  xs :: [CUChar]) (\p -> bufferData ElementArrayBuffer $= (fromIntegral $ sizeOf (0 :: CFloat) * length xs, p, StaticDraw))
                                                     return $ IndexBuffer b (length xs) UnsignedByte
                                                HT.insert cache iName i
                                                addFinalizer xs $ do HT.delete cache iName
@@ -319,7 +320,7 @@ hiddenWindowContextCache = unsafePerformIO $ do
 
 {-# NOINLINE windowContextCaches #-}
 windowContextCaches :: IORef (Map GLUT.Window ContextCache)
-windowContextCaches = unsafePerformIO $ newIORef $ Map.empty
+windowContextCaches = unsafePerformIO $ newIORef Map.empty
 
 getContextCache :: GLUT.Window -> IO (Maybe ContextCache)
 getContextCache w = do m <- atomicModifyIORef windowContextCaches (\m -> (m,m))

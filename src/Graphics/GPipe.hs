@@ -20,17 +20,12 @@
 -----------------------------------------------------------------------------
 
 module Graphics.GPipe (
-    module Graphics.GPipe.Stream,
-    module Graphics.GPipe.Stream.Primitive,
-    module Graphics.GPipe.Stream.Fragment,
-    module Graphics.GPipe.FrameBuffer,
-    module Graphics.GPipe.Texture,
-    module Graphics.GPipe.Format,
+    module X
 ) where
 
-import Graphics.GPipe.Stream
-import Graphics.GPipe.Stream.Primitive
-import Graphics.GPipe.Stream.Fragment
-import Graphics.GPipe.FrameBuffer
-import Graphics.GPipe.Texture
-import Graphics.GPipe.Format
+import Graphics.GPipe.Stream as X
+import Graphics.GPipe.Stream.Primitive as X
+import Graphics.GPipe.Stream.Fragment as X
+import Graphics.GPipe.FrameBuffer as X
+import Graphics.GPipe.Texture as X
+import Graphics.GPipe.Format as X

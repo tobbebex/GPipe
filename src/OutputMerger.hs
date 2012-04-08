@@ -1,3 +1,4 @@
+{-# LANGUAGE RankNTypes, ScopedTypeVariables #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  OutputMerger
@@ -59,8 +60,8 @@ import Graphics.UI.GLUT
     (reshapeCallback, displayCallback, Window)
 import Control.Monad (liftM)
 import Data.Maybe (fromJust)
-import Control.Monad.Reader (runReaderT)
 import Control.Exception (evaluate)
+import Control.Monad.Trans.Reader (runReaderT)
 
 type FragmentDepth = Fragment Float
 -- | 'True' for each color component that should be written to the 'FrameBuffer'.

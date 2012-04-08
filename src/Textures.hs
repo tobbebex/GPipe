@@ -1,3 +1,4 @@
+{-# LANGUAGE ParallelListComp, TypeFamilies, MultiParamTypeClasses, FlexibleInstances, FlexibleContexts, ScopedTypeVariables #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  Textures

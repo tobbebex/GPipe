@@ -1,3 +1,4 @@
+{-# LANGUAGE RankNTypes, TypeOperators, FlexibleInstances, GeneralizedNewtypeDeriving, ScopedTypeVariables #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  InputAssembler
@@ -19,9 +20,9 @@ module InputAssembler (
     toIndexedGPUStream,
 ) where
 
+import Control.Monad.Trans.State.Lazy
 import GPUStream
 import Shader
-import Control.Monad.State
 import Data.Vec ((:.)(..), Vec2, Vec3, Vec4)
 
 -- | A monad in which CPU data gets converted to vertex data.
