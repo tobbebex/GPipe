@@ -74,8 +74,8 @@ instance Monoid (FragmentStream a) where
 -- | Filters out fragments in a stream where the provided function returns 'true'.
 filterFragments :: (a -> Fragment Bool) -> FragmentStream a -> FragmentStream a
 filterFragments f (FragmentStream xs)             = FragmentStream $ map filterOne xs
-	where filterOne (fdesc, b, a)                    = (fdesc, b &&* f a, a)
-	
+    where filterOne (fdesc, b, a)                    = (fdesc, b &&* f a, a)
+    
 
 -----------------------------------------
 

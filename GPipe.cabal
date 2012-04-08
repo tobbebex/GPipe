@@ -1,5 +1,5 @@
 name: GPipe
-version: 1.2.1
+version: 1.3
 cabal-version: >= 1.2.3
 build-type: Simple
 license: BSD3
@@ -28,26 +28,15 @@ Flag containers03
    Default: False
 
 Library
-    if flag(containers03)
-        build-depends: containers >= 0.3 && < 0.4, 
-                       mtl -any, 
-                       list-tries >= 0.1 && < 0.2,
-                       GLUT ==2.2.2.0,
-                       OpenGL ==2.4.0.1,
-                       Boolean == 0.0.1,
-                       Vec == 0.9.7, 
-                       Vec-Boolean == 1.0.3,
-                       base >= 3 && < 5
-    else
-        build-depends: containers >= 0.2 && < 0.3,
-                       mtl -any, 
-                       list-tries >= 0.1 && < 0.2,
-                       GLUT ==2.2.2.0,
-                       OpenGL ==2.4.0.1,
-                       Boolean == 0.0.1,
-                       Vec == 0.9.7, 
-                       Vec-Boolean == 1.0.3,
-                       base >= 3 && < 5
+    build-depends: containers >= 0.3 && < 0.4, 
+                    mtl -any, 
+                    list-tries >= 0.4 && < 0.5,
+                    GLUT ==2.2.2.0,
+                    OpenGL ==2.4.0.1,
+                    Boolean == 0.0.1,
+                    Vec == 0.9.7, 
+                    Vec-Boolean == 1.0.3,
+                    base >= 3 && < 5
                        
     exposed-modules: Graphics.GPipe
                      Graphics.GPipe.Stream

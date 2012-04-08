@@ -78,7 +78,7 @@ rasterizeFront x = case x of
         (PrimitiveStreamShader xs) -> FragmentStream $ map rasterizeOne xs
         (PrimitiveStreamNoShader [] _) -> FragmentStream []
         (PrimitiveStreamNoShader xs a) -> FragmentStream [rasterizeOne (xs, a)]
-	where rasterizeOne (pdesc, (pos, va)) = ((pdesc, CullBack, pos), true, getFragmentInput va)
+    where rasterizeOne (pdesc, (pos, va)) = ((pdesc, CullBack, pos), true, getFragmentInput va)
 
 -- | Rasterize both sides of triangles with vertices containing canonical view coordinates into fragments, also returning the primitives side in the fragments.    
 rasterizeFrontAndBack :: VertexOutput a
@@ -88,7 +88,7 @@ rasterizeFrontAndBack x = case x of
         (PrimitiveStreamShader xs) -> FragmentStream $ map rasterizeOne xs
         (PrimitiveStreamNoShader [] _) -> FragmentStream []
         (PrimitiveStreamNoShader xs a) -> FragmentStream [rasterizeOne (xs, a)]
-	where rasterizeOne (pdesc, (pos, va)) = ((pdesc, CullNone, pos), true, (fragmentFrontFacing, getFragmentInput va))
+    where rasterizeOne (pdesc, (pos, va)) = ((pdesc, CullNone, pos), true, (fragmentFrontFacing, getFragmentInput va))
 
 -- | Rasterize back side of triangles with vertices containing canonical view coordinates into fragments.    
 rasterizeBack :: VertexOutput a
@@ -98,7 +98,7 @@ rasterizeBack x = case x of
         (PrimitiveStreamShader xs) -> FragmentStream $ map rasterizeOne xs
         (PrimitiveStreamNoShader [] _) -> FragmentStream []
         (PrimitiveStreamNoShader xs a) -> FragmentStream [rasterizeOne (xs, a)]
-	where rasterizeOne (pdesc, (pos, va)) = ((pdesc, CullFront, pos), true, getFragmentInput va)
+    where rasterizeOne (pdesc, (pos, va)) = ((pdesc, CullFront, pos), true, getFragmentInput va)
 
 --------------------------------------
 -- Private

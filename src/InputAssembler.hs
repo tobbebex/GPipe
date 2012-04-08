@@ -76,7 +76,7 @@ toGPUStream :: (VertexInput a, Primitive p)
             -> PrimitiveStream p a -- ^ The resulting 'PrimitiveStream'.
 toGPUStream _ [] = PrimitiveStreamNoShader [] undefined
 toGPUStream p xs = let (a, fs) = getVertexInput xs
-		           in PrimitiveStreamNoShader [(getPrimitiveMode p, VertexSetup fs)] a
+                   in PrimitiveStreamNoShader [(getPrimitiveMode p, VertexSetup fs)] a
 
 -- | Converts a list of values to a 'PrimitiveStream', using a specified 'Primitive' type and an index list.
 -- This will use index buffer objects on the GPU, and is recommended if several primitives share vertices.
@@ -89,7 +89,7 @@ toIndexedGPUStream :: (VertexInput a, Primitive p)
                    -> PrimitiveStream p a -- ^ The resulting 'PrimitiveStream'.
 toIndexedGPUStream _ [] _ = PrimitiveStreamNoShader [] undefined
 toIndexedGPUStream p xs i = let (a, fs) = getVertexInput xs
-		                    in PrimitiveStreamNoShader [(getPrimitiveMode p, IndexedVertexSetup fs i)] a
+                            in PrimitiveStreamNoShader [(getPrimitiveMode p, IndexedVertexSetup fs i)] a
 
 
 --------------------------------------
@@ -100,4 +100,4 @@ getVertexInput :: forall a. VertexInput a => [CPU a] -> (a, [[Float]])
 getVertexInput xs = let readInput :: CPU a -> (a, [Float])
                         readInput = flip runState [] . fromInputAssembler . toVertex
                         e = "The method toVertex of an instance of Graphics.GPipe.Stream.Primitive.VertexInput is strict in it's input. Remember that 'toVertex undefined >> a' must be equal to 'a'. Contact the GPipe author for more information."
-		                in (fst $ readInput (error e :: CPU a), map (reverse . snd  . readInput) xs)
+                        in (fst $ readInput (error e :: CPU a), map (reverse . snd  . readInput) xs)
