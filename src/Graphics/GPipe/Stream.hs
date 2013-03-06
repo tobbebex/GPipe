@@ -19,6 +19,7 @@
 
 module Graphics.GPipe.Stream (
     -- * Common classes
+    Shader(),
     GPU(..),
     Real'(..),
     Convert(..),

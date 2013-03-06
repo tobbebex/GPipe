@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeOperators, TypeFamilies, FlexibleInstances, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE Arrows, TypeOperators, TypeFamilies, FlexibleInstances, GeneralizedNewtypeDeriving, TypeSynonymInstances, ScopedTypeVariables #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  Rasterizer
@@ -25,10 +25,12 @@ import Shader
 import Data.Vec ((:.)(..), Vec2, Vec3, Vec4)
 import GPUStream
 import Data.Functor.Identity
+import Control.Arrow (Arrow, returnA)
+import Control.Category (Category)
 
--- | A monad in which vertex data gets converted to fragment data.
---   Use 'toFragment' in the existing instances of 'VertexOutput' to operate in this monad.
-newtype Rasterizer a = Rasterizer {fromRasterizer :: Identity a} deriving (Functor, Monad)
+-- | An arrow by which vertex data gets converted to fragment data.
+--   Use 'toFragment' in the existing instances of 'VertexOutput' to operate in this arrow.
+newtype Rasterizer a b = Rasterizer {fromRasterizer :: a -> b} deriving (Category, Arrow)
 
 -- | The context of types that can be rasterized from vertices in 'PrimitiveStream's to fragments in 'FragmentStream's.
 --   Create your own instances in terms of the existing ones, e.g. convert your vertex data to 'Vertex' 'Float's,
@@ -36,40 +38,37 @@ newtype Rasterizer a = Rasterizer {fromRasterizer :: Identity a} deriving (Funct
 class GPU a => VertexOutput a where
     -- | The corresponding type in the 'FragmentStream' after rasterization.
     type FragmentInput a
-    -- | Turns a vertex value into a fragment value in the 'Rasterizer' monad. 
-    toFragment :: a -> Rasterizer (FragmentInput a) 
+    -- | Turns a vertex value into a fragment value in the 'Rasterizer' arrow. 
+    toFragment :: Rasterizer a (FragmentInput a) 
 
 instance VertexOutput (Vertex Float) where
     type  FragmentInput (Vertex Float) = Fragment Float
-    toFragment = Rasterizer . return . rasterizeVertex
+    toFragment = Rasterizer rasterizeVertex
 
 instance VertexOutput () where
     type FragmentInput () = ()
-    toFragment () = return ()                                         
+    toFragment = Rasterizer id                                         
 instance (VertexOutput a,VertexOutput b) => VertexOutput (a,b) where
     type FragmentInput (a,b) = (FragmentInput a, FragmentInput b)
-    toFragment (a, b) = do a' <- toFragment a
-                           b' <- toFragment b
-                           return (a', b')
+    toFragment = proc (a, b) -> do a' <- toFragment -< a
+                                   b' <- toFragment -< b
+                                   returnA -< (a', b')
 instance (VertexOutput a,VertexOutput b,VertexOutput c) => VertexOutput (a,b,c) where
     type FragmentInput (a,b,c) = (FragmentInput a, FragmentInput b, FragmentInput c)
-    toFragment (a, b, c) = do a' <- toFragment a
-                              b' <- toFragment b
-                              c' <- toFragment c
-                              return (a', b', c')
+    toFragment = proc (a, b, c) -> do (a', b') <- toFragment -< (a, b)
+                                      c' <- toFragment -< c
+                                      returnA -< (a', b', c')
 instance (VertexOutput a,VertexOutput b,VertexOutput c,VertexOutput d) => VertexOutput (a,b,c,d) where
     type FragmentInput (a,b,c,d) = (FragmentInput a, FragmentInput b, FragmentInput c, FragmentInput d)
-    toFragment (a, b, c, d) = do a' <- toFragment a
-                                 b' <- toFragment b
-                                 c' <- toFragment c
-                                 d' <- toFragment d
-                                 return (a', b', c', d')
+    toFragment = proc (a, b, c, d) -> do (a', b', c') <- toFragment -< (a, b, c)
+                                         d' <- toFragment -< d
+                                         returnA -< (a', b', c', d')
 
 instance (VertexOutput a, VertexOutput b) => VertexOutput (a:.b) where
     type FragmentInput (a:.b) = FragmentInput a :. FragmentInput b
-    toFragment (a:.b) = do a' <- toFragment a
-                           b' <- toFragment b
-                           return $ a':.b'
+    toFragment = proc (a:.b) -> do a' <- toFragment -< a
+                                   b' <- toFragment -< b
+                                   returnA -< a':.b'
 
 -- | Rasterize front side of all types of primitives with vertices containing canonical view coordinates into fragments.    
 rasterizeFront :: VertexOutput a
@@ -105,5 +104,5 @@ rasterizeBack x = case x of
 -- Private
 --
 
-getFragmentInput ::  VertexOutput a => a -> FragmentInput a
-getFragmentInput = runIdentity . fromRasterizer . toFragment
+getFragmentInput :: forall a. VertexOutput a => a -> FragmentInput a
+getFragmentInput = fromRasterizer (toFragment :: Rasterizer a (FragmentInput a))

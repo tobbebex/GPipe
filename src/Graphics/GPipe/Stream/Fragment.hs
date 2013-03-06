@@ -36,7 +36,8 @@
 module Graphics.GPipe.Stream.Fragment (
     -- * Data types
     FragmentStream(),
-    Fragment(),
+    F,
+    Fragment,
 
     -- * Various fragment functions
     dFdx,

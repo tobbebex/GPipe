@@ -35,7 +35,8 @@
 module Graphics.GPipe.Stream.Primitive (
     -- * Data types
     PrimitiveStream(),
-    Vertex(),
+    V,
+    Vertex,
 
     -- * Creating primitive streams
     VertexInput(..),

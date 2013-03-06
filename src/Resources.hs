@@ -316,6 +316,7 @@ hiddenWindowContextCache = unsafePerformIO $ do
        GLUT.initialDisplayMode $= [ GLUT.SingleBuffered, GLUT.RGBMode, GLUT.WithAlphaComponent, GLUT.WithDepthBuffer, GLUT.WithStencilBuffer ]
        w <- GLUT.createWindow "Hidden Window"
        GLUT.windowStatus $= GLUT.Hidden
+       GLUT.displayCallback $= return () -- https://github.com/tobbebex/GPipe/issues/4
        newContextCache w
 
 {-# NOINLINE windowContextCaches #-}

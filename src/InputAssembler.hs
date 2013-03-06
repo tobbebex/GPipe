@@ -1,4 +1,4 @@
-{-# LANGUAGE RankNTypes, TypeOperators, FlexibleInstances, GeneralizedNewtypeDeriving, ScopedTypeVariables #-}
+{-# LANGUAGE Arrows, RankNTypes, TypeOperators, FlexibleInstances, GeneralizedNewtypeDeriving, ScopedTypeVariables, TypeSynonymInstances #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  InputAssembler
@@ -20,53 +20,47 @@ module InputAssembler (
     toIndexedGPUStream,
 ) where
 
-import Control.Monad.Trans.State.Lazy
 import GPUStream
 import Shader
 import Data.Vec ((:.)(..), Vec2, Vec3, Vec4)
+import Control.Arrow
+import Control.Category (Category)
+import Control.Monad.Trans.State.Lazy
 
--- | A monad in which CPU data gets converted to vertex data.
---   Use 'toVertex' in the existing instances of 'VertexInput' to operate in this monad.
-newtype InputAssembler a = InputAssembler {fromInputAssembler :: State [Float] a} deriving Monad
+-- | An arrow by which CPU data gets converted to vertex data.
+--   Use 'toVertex' in the existing instances of 'VertexInput' to operate in this arrow.
+newtype InputAssembler a b = InputAssembler {fromInputAssembler :: Kleisli (State [Float]) a b} deriving (Category, Arrow)
 
 -- | The context of types that can be converted into vertices in 'PrimitiveStream's.
 --   Create your own instances in terms of the existing ones, e.g. convert your vertex data to 'Float's,
 --   turn them into 'Vertex' 'Float's with 'toVertex' and then convert them to your vertex data representation.
 class GPU a => VertexInput a where
-    -- | Turns an ordinary value into a vertex value in the 'InputAssembler' monad. The following rule must be satisfied:
-    --   
-    -- > toVertex undefined >> a   =  a
-    --
-    --   This ensures that its definition always use the same series of 'toVertex' calls to convert values of the same type.
-    --   This unfortunatly rules out ordinary lists (but instances for fixed length lists from the Vec package are however provided). 
-    toVertex :: CPU a -> InputAssembler a
+    -- | Turns an ordinary value into a vertex value in the 'InputAssembler' arrow.
+    toVertex :: InputAssembler (CPU a) a
 
 instance VertexInput (Vertex Float) where
-    toVertex a = InputAssembler $ do x <- gets length
-                                     modify (a:)
-                                     return $ inputVertex x
+    toVertex = InputAssembler $ Kleisli $ \ a -> do x <- gets length
+                                                    modify (a:)
+                                                    return $ inputVertex x
 instance VertexInput () where
-    toVertex ~() = return ()                                         
+    toVertex = proc () -> returnA -< ()
 instance (VertexInput a,VertexInput b) => VertexInput (a,b) where
-    toVertex ~(a, b) = do a' <- toVertex a
-                          b' <- toVertex b
-                          return (a', b')
+    toVertex = proc (a, b) -> do a' <- toVertex -< a
+                                 b' <- toVertex -< b
+                                 returnA -< (a', b')
 instance (VertexInput a,VertexInput b,VertexInput c) => VertexInput (a,b,c) where
-    toVertex ~(a, b, c) = do a' <- toVertex a
-                             b' <- toVertex b
-                             c' <- toVertex c
-                             return (a', b', c')
+    toVertex = proc (a, b, c) -> do (a', b') <- toVertex -< (a, b)
+                                    c' <- toVertex -< c
+                                    returnA -< (a', b', c')
 instance (VertexInput a,VertexInput b,VertexInput c,VertexInput d) => VertexInput (a,b,c,d) where
-    toVertex ~(a, b, c, d) = do a' <- toVertex a
-                                b' <- toVertex b
-                                c' <- toVertex c
-                                d' <- toVertex d
-                                return (a', b', c', d')
+    toVertex = proc (a, b, c, d) -> do (a', b', c') <- toVertex -< (a, b, c)
+                                       d' <- toVertex -< d
+                                       returnA -< (a', b', c', d')
 
 instance (VertexInput a, VertexInput b) => VertexInput (a:.b) where
-    toVertex ~(a:.b) = do a' <- toVertex a
-                          b' <- toVertex b
-                          return $ a':.b'
+    toVertex = proc (a:.b) -> do a' <- toVertex -< a
+                                 b' <- toVertex -< b
+                                 returnA -< a':.b'
                                                   
 -- | Converts a list of values to a 'PrimitiveStream', using a specified 'Primitive' type.
 -- This function is lazy in the aspect that if parts of the values aren't used on the GPU, they won't
@@ -99,6 +93,5 @@ toIndexedGPUStream p xs i = let (a, fs) = getVertexInput xs
 
 getVertexInput :: forall a. VertexInput a => [CPU a] -> (a, [[Float]])
 getVertexInput xs = let readInput :: CPU a -> (a, [Float])
-                        readInput = flip runState [] . fromInputAssembler . toVertex
-                        e = "The method toVertex of an instance of Graphics.GPipe.Stream.Primitive.VertexInput is strict in it's input. Remember that 'toVertex undefined >> a' must be equal to 'a'. Contact the GPipe author for more information."
-                        in (fst $ readInput (error e :: CPU a), map (reverse . snd  . readInput) xs)
+                        readInput = flip runState [] . runKleisli (fromInputAssembler (toVertex :: InputAssembler (CPU a) a))
+                        in (fst $ readInput $ head xs, map (reverse . snd  . readInput) xs)

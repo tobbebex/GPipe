@@ -161,9 +161,9 @@ instance ColorFormat f => Texture (Texture3D f) where
                [(i,p) | i<- [0..] | p<- ps']
               GL.textureLevelRange GL.Texture3D $= (0, fromIntegral $ length ps' - 1)
     textureCPUFormatByteSize f (x:.y:.z:.()) = map (\(x,y,z)-> y*z*formatRowByteSize f x) [(x',y',z') | x' <- mipLevels x | y' <- mipLevels y | z' <- mipLevels z | _ <- mipLevels' (max x (max y z))]
-    sample s (Texture3D t) v = fSampleBinFunc "texture3D" Sampler3D s t v
-    sampleBias s (Texture3D t) v b = fSampleTernFunc "texture3D" Sampler3D s t v b
-    sampleLod s (Texture3D t) v m = vSampleTernFunc "texture3DLod" Sampler3D s t v m
+    sample s (Texture3D t) v = sampleBinFunc "texture3D" Sampler3D s t v
+    sampleBias s (Texture3D t) v b = sampleTernFunc "texture3D" Sampler3D s t v b
+    sampleLod s (Texture3D t) v m = sampleTernFunc "texture3DLod" Sampler3D s t v m
 instance ColorFormat f => Texture (Texture2D f) where
     type TextureFormat (Texture2D f) = f
     type TextureSize (Texture2D f) = Vec2 Int
@@ -183,9 +183,9 @@ instance ColorFormat f => Texture (Texture2D f) where
                [(i,p) | i<- [0..] | p<- ps']
               GL.textureLevelRange GL.Texture2D $= (0, fromIntegral $ length ps' - 1)
     textureCPUFormatByteSize f (x:.y:.()) = map (\(x,y)-> y*formatRowByteSize f x) [(x',y') | x' <- mipLevels x | y' <- mipLevels y | _ <- mipLevels' (max x y)]
-    sample s (Texture2D t) v = fSampleBinFunc "texture2D" Sampler2D s t v
-    sampleBias s (Texture2D t) v b = fSampleTernFunc "texture2D" Sampler2D s t v b
-    sampleLod s (Texture2D t) v m = vSampleTernFunc "texture2DLod" Sampler2D s t v m
+    sample s (Texture2D t) v = sampleBinFunc "texture2D" Sampler2D s t v
+    sampleBias s (Texture2D t) v b = sampleTernFunc "texture2D" Sampler2D s t v b
+    sampleLod s (Texture2D t) v m = sampleTernFunc "texture2DLod" Sampler2D s t v m
 instance ColorFormat f => Texture (Texture1D f) where
     type TextureFormat (Texture1D f) = f
     type TextureSize (Texture1D f) = Int
@@ -205,9 +205,9 @@ instance ColorFormat f => Texture (Texture1D f) where
                [(i,p) | i<- [0..] | p<- ps']
               GL.textureLevelRange GL.Texture1D $= (0, fromIntegral $ length ps' - 1)
     textureCPUFormatByteSize f x = map (\x-> formatRowByteSize f x) [x' | x' <- mipLevels' x]
-    sample s (Texture1D t) v = fSampleBinFunc "texture1D" Sampler1D s t (v:.())
-    sampleBias s (Texture1D t) v b = fSampleTernFunc "texture1D" Sampler1D s t (v:.()) b
-    sampleLod s (Texture1D t) v m = vSampleTernFunc "texture1DLod" Sampler1D s t (v:.()) m
+    sample s (Texture1D t) v = sampleBinFunc "texture1D" Sampler1D s t (v:.())
+    sampleBias s (Texture1D t) v b = sampleTernFunc "texture1D" Sampler1D s t (v:.()) b
+    sampleLod s (Texture1D t) v m = sampleTernFunc "texture1DLod" Sampler1D s t (v:.()) m
 instance ColorFormat f => Texture (TextureCube f) where
     type TextureFormat (TextureCube f) = f
     type TextureSize (TextureCube f) = Vec2 Int
@@ -231,9 +231,9 @@ instance ColorFormat f => Texture (TextureCube f) where
                   [(t,ps'') | t <- cubeMapTargets | ps'' <- splitIn 6 ps']
               GL.textureLevelRange GL.TextureCubeMap $= (0, fromIntegral $ length ps' - 1)
     textureCPUFormatByteSize f (x:.y:.()) = concat $ replicate 6 $ map (\(x,y)-> y*formatRowByteSize f x) [(x',y') | x' <- mipLevels x | y' <- mipLevels y | _ <- mipLevels' (max x y)]
-    sample s (TextureCube t) v = fSampleBinFunc "textureCube" Sampler3D s t v
-    sampleBias s (TextureCube t) v b = fSampleTernFunc "textureCube" Sampler3D s t v b
-    sampleLod s (TextureCube t) v m = vSampleTernFunc "textureCubeLod" Sampler3D s t v m
+    sample s (TextureCube t) v = sampleBinFunc "textureCube" Sampler3D s t v
+    sampleBias s (TextureCube t) v b = sampleTernFunc "textureCube" Sampler3D s t v b
+    sampleLod s (TextureCube t) v m = sampleTernFunc "textureCubeLod" Sampler3D s t v m
 
 -- | The formats that is instances of this class may be used as depth textures, i.e. created with
 --   'newDepthTexture', 'fromFrameBufferDepth' and 'fromFrameBufferCubeDepth'.

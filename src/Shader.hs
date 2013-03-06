@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeOperators, TypeFamilies, FlexibleInstances, MultiParamTypeClasses #-}
+{-# LANGUAGE TypeOperators, TypeFamilies, FlexibleInstances, MultiParamTypeClasses, EmptyDataDecls, TypeSynonymInstances #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  Shader
@@ -18,8 +18,11 @@ module Shader (
     rasterizeVertex,
     inputVertex,
     fragmentFrontFacing,
-    Vertex(),
-    Fragment(),
+    Shader(),
+    V, 
+    F,
+    Vertex,
+    Fragment,
     ShaderInfo,
     getShaders,
     Real'(..),
@@ -27,10 +30,8 @@ module Shader (
     dFdx,
     dFdy,
     fwidth,
-    vSampleBinFunc,
-    fSampleBinFunc,
-    vSampleTernFunc,
-    fSampleTernFunc,
+    sampleBinFunc,
+    sampleTernFunc,
     module Data.Boolean
 ) where
 
@@ -70,23 +71,31 @@ data ShaderTree = ShaderUniform !Uniform
                 | ShaderOp !Op (String -> [String] -> String) [ShaderTree]
 type ShaderDAG = ([Int],[(ShaderTree, [Int])])
 
--- | An opaque type constructor for atomic values in a vertex on the GPU, e.g. 'Vertex' 'Float'.
-newtype Vertex a = Vertex { fromVertex :: ShaderTree }
--- | An opaque type constructor for atomic values in a fragment on the GPU, e.g. 'Fragment' 'Float'. 
-newtype Fragment a = Fragment { fromFragment :: ShaderTree }
+-- | An opaque type constructor for atomic values in a specific GPU context (i.e. 'V' or 'F'), e.g. 'Shader' 'V' 'Float'.
+newtype Shader c t = Shader { fromS :: ShaderTree }
+
+-- | Used to denote a vertex context in the first parameter to 'Shader'
+data V
+-- | Used to denote a fragment context in the first parameter to 'Shader'
+data F 
+
+-- | A type synonyme for atomic values in a vertex on the GPU, e.g. 'Vertex' 'Float'.
+type Vertex = Shader V
+-- | A type synonyme for atomic values in a fragment on the GPU, e.g. 'Fragment' 'Float'. 
+type Fragment = Shader F
 
 rasterizeVertex :: Vertex Float -> Fragment Float
-rasterizeVertex = Fragment . ShaderInputTree . fromVertex
+rasterizeVertex = Shader . ShaderInputTree . fromS
 inputVertex :: Int -> Vertex Float
-inputVertex = Vertex . ShaderInput
+inputVertex = Shader . ShaderInput
 fragmentFrontFacing :: Fragment Bool
-fragmentFrontFacing = Fragment $ ShaderOp "gl_ff" (assign "bool" (const "gl_FrontFacing")) []
+fragmentFrontFacing = Shader $ ShaderOp "gl_ff" (assign bool (const "gl_FrontFacing")) []
 
 getShaders :: Vec4 (Vertex Float) -> Fragment Bool -> Vec4 (Fragment Float) -> Maybe (Fragment Float) -> (ShaderInfo, ShaderInfo, [Int])
-getShaders pos (Fragment ndisc) color mdepth = ((createShaderKey vdag,vstr,vuns),(createShaderKey fdag,fstr,funs), inputs)
-    where fcolor = fromFragment $ fFromVec "vec4" color
-          (varyings, fdag@(fcolor':ndisc':mdepth',_)) = splitShaders (createDAG (fcolor:ndisc: map fromFragment (maybeToList mdepth)))
-          vpos = fromVertex $ vFromVec "vec4" pos
+getShaders pos (Shader ndisc) color mdepth = ((createShaderKey vdag,vstr,vuns),(createShaderKey fdag,fstr,funs), inputs)
+    where fcolor = fromS $ fromVec "vec4" color
+          (varyings, fdag@(fcolor':ndisc':mdepth',_)) = splitShaders (createDAG (fcolor:ndisc: map fromS (maybeToList mdepth)))
+          vpos = fromS $ fromVec "vec4" pos
           vdag@(vpos':varyings',_) = createDAG (vpos:varyings)
           inputs = extractInputs vdag
           vcodeAssigns = getCodeAssignments (fromJust . flip elemIndex inputs) (length inputs) "v" vdag
@@ -105,30 +114,18 @@ getShaders pos (Fragment ndisc) color mdepth = ((createShaderKey vdag,vstr,vuns)
           vstr = makeShader (attributeDecl ++ varyingDecl ++ uniformDecls "v" vuns) (vcodeAssigns ++ vCodeFinish)
           fstr = makeShader (varyingDecl ++ uniformDecls "f" funs) (fcodeAssigns ++ fcodeFinish)          
                 
-vSampleBinFunc f t s tex c = toColor $ vToVec "float" 4 (vBinaryFunc "vec4" f (Vertex $ ShaderUniform $ UniformSampler t s tex) (vFromVec (tName c) c))
-fSampleBinFunc f t s tex c = toColor $ fToVec "float" 4 (fBinaryFunc "vec4" f (Fragment $ ShaderUniform $ UniformSampler t s tex) (fFromVec (tName c) c))
-vSampleTernFunc f t s tex c x = toColor $ vToVec "float" 4 (vTernaryFunc "vec4" f (Vertex $ ShaderUniform $ UniformSampler t s tex) (vFromVec (tName c) c) x)
-fSampleTernFunc f t s tex c x = toColor $ fToVec "float" 4 (fTernaryFunc "vec4" f (Fragment $ ShaderUniform $ UniformSampler t s tex) (fFromVec (tName c) c) x)
+sampleBinFunc f t s tex c = toColor $ toVec float 4 (binaryFunc "vec4" f (Shader $ ShaderUniform $ UniformSampler t s tex) (fromVec (tName c) c))
+sampleTernFunc f t s tex c x = toColor $ toVec float 4 (ternaryFunc "vec4" f (Shader $ ShaderUniform $ UniformSampler t s tex) (fromVec (tName c) c) x)
 
-instance GPU (Vertex Float) where
-    type CPU (Vertex Float) = Float
-    toGPU = Vertex . ShaderUniform . UniformFloat
-instance GPU (Vertex Int) where
-    type CPU (Vertex Int) = Int
-    toGPU = Vertex . ShaderUniform . UniformInt
-instance GPU (Vertex Bool) where
-    type CPU (Vertex Bool) = Bool
-    toGPU = Vertex . ShaderUniform . UniformBool
-
-instance GPU (Fragment Float) where
-    type CPU (Fragment Float) = Float
-    toGPU = Fragment . ShaderUniform . UniformFloat
-instance GPU (Fragment Int) where
-    type CPU (Fragment Int) = Int
-    toGPU = Fragment . ShaderUniform . UniformInt
-instance GPU (Fragment Bool) where
-    type CPU (Fragment Bool) = Bool
-    toGPU = Fragment . ShaderUniform . UniformBool
+instance GPU (Shader c Float) where
+    type CPU (Shader c Float) = Float
+    toGPU = Shader . ShaderUniform . UniformFloat
+instance GPU (Shader c Int) where
+    type CPU (Shader c Int) = Int
+    toGPU = Shader . ShaderUniform . UniformInt
+instance GPU (Shader c Bool) where
+    type CPU (Shader c Bool) = Bool
+    toGPU = Shader . ShaderUniform . UniformBool
 
 instance GPU () where
     type CPU () = ()
@@ -147,110 +144,49 @@ instance (GPU a, GPU b) => GPU (a:.b) where
     type CPU (a:.b) = CPU a :. CPU b
     toGPU (a:.b) = toGPU a :. toGPU b
 
-instance Eq (Vertex a) where
-  (==) = noFun "(==)"
-  (/=) = noFun "(/=)" 
-instance Eq (Fragment a) where
-  (==) = noFun "(==)"
-  (/=) = noFun "(/=)"
-instance Show (Vertex a) where
-  show      = noFun "show"
-instance Show (Fragment a) where
-  show      = noFun "show"
-
-instance Ord (Vertex Float) where
-  (<=) = noFun "(<=)"
-  min = vBinaryFunc "float" "min"
-  max = vBinaryFunc "float" "max"
-instance Ord (Fragment Float) where
-  (<=) = noFun "(<=)"
-  min = fBinaryFunc "float" "min"
-  max = fBinaryFunc "float" "max"
-instance Num (Vertex Float) where
-  negate      = vUnaryPreOp "float" "-"
-  (+)         = vBinaryOp "float" "+"
-  (*)         = vBinaryOp "float" "*"
-  fromInteger = Vertex . ShaderConstant . ConstFloat . fromInteger
-  abs         = vUnaryFunc "float" "abs"
-  signum      = vUnaryFunc "float" "sign"
-instance Num (Fragment Float) where
-  negate      = fUnaryPreOp "float" "-"
-  (+)         = fBinaryOp "float" "+"
-  (*)         = fBinaryOp "float" "*"
-  fromInteger = Fragment . ShaderConstant . ConstFloat . fromInteger
-  abs         = fUnaryFunc "float" "abs"
-  signum      = fUnaryFunc "float" "sign"
+ 
+instance Num (Shader c Float) where
+  negate      = unaryPreOp float "-"
+  (+)         = binaryOp float "+"
+  (*)         = binaryOp float "*"
+  fromInteger = Shader . ShaderConstant . ConstFloat . fromInteger
+  abs         = unaryFunc float "abs"
+  signum      = unaryFunc float "sign"
   
-
-instance Ord (Vertex Int) where
-  (<=) = noFun "(<=)"
-  min = noFun "min"
-  max = noFun "max"
-instance Ord (Fragment Int) where
-  (<=) = noFun "(<=)"
-  min = noFun "min"
-  max = noFun "max"
-instance Num (Vertex Int) where
-  negate      = vUnaryPreOp "int" "-"
-  (+)         = vBinaryOp "int" "+"
-  (*)         = vBinaryOp "int" "*"
-  fromInteger = Vertex . ShaderConstant . ConstInt . fromInteger
-  abs         = noFun "abs"
-  signum      = noFun "sign"
-instance Num (Fragment Int) where
-  negate      = fUnaryPreOp "int" "-"
-  (+)         = fBinaryOp "int" "+"
-  (*)         = fBinaryOp "int" "*"
-  fromInteger = Fragment . ShaderConstant . ConstInt . fromInteger
-  abs         = noFun "abs"
-  signum      = noFun "sign"
   
+instance Num (Shader c Int) where
+  negate      = unaryPreOp int "-"
+  (+)         = binaryOp int "+"
+  (*)         = binaryOp int "*"
+  fromInteger = Shader . ShaderConstant . ConstInt . fromInteger
+  abs x       = ifB (x <* 0) (-x) x
+  signum x    = ifB (x <* 0) (-1) 1
     
-instance Fractional (Vertex Float) where
-  (/)          = vBinaryOp "float" "/"
-  fromRational = Vertex . ShaderConstant . ConstFloat . fromRational
-instance  Fractional (Fragment Float) where
-  (/)          = fBinaryOp "float" "/"
-  fromRational = Fragment . ShaderConstant . ConstFloat . fromRational
-instance Floating (Vertex Float) where
-  pi    = Vertex $ ShaderConstant $ ConstFloat pi
-  sqrt  = vUnaryFunc "float" "sqrt"
-  exp   = vUnaryFunc "float" "exp"
-  log   = vUnaryFunc "float" "log"
-  (**)  = vBinaryFunc "float" "pow"
-  sin   = vUnaryFunc "float" "sin"
-  cos   = vUnaryFunc "float" "cos"
-  tan   = vUnaryFunc "float" "tan"
-  asin  = vUnaryFunc "float" "asin"
-  acos  = vUnaryFunc "float" "acos"
-  atan  = vUnaryFunc "float" "atan"
-  sinh  = noFun "float" "sinh"
-  cosh  = noFun "float" "cosh"
-  asinh = noFun "float" "asinh"
-  atanh = noFun "float" "atanh"
-  acosh = noFun "float" "acosh"
-instance Floating (Fragment Float) where
-  pi    = Fragment $ ShaderConstant $ ConstFloat pi
-  sqrt  = fUnaryFunc "float" "sqrt"
-  exp   = fUnaryFunc "float" "exp"
-  log   = fUnaryFunc "float" "log"
-  (**)  = fBinaryFunc "float" "pow"
-  sin   = fUnaryFunc "float" "sin"
-  cos   = fUnaryFunc "float" "cos"
-  tan   = fUnaryFunc "float" "tan"
-  asin  = fUnaryFunc "float" "asin"
-  acos  = fUnaryFunc "float" "acos"
-  atan  = fUnaryFunc "float" "atan"
-  sinh  = noFun "sinh"
-  cosh  = noFun "cosh"
-  asinh = noFun "asinh"
-  atanh = noFun "atanh"
-  acosh = noFun "acosh"
+instance Fractional (Shader c Float) where
+  (/)          = binaryOp float "/"
+  fromRational = Shader . ShaderConstant . ConstFloat . fromRational
+instance Floating (Shader c Float) where
+  pi    = Shader $ ShaderConstant $ ConstFloat pi
+  sqrt  = unaryFunc float "sqrt"
+  exp   = unaryFunc float "exp"
+  log   = unaryFunc float "log"
+  (**)  = binaryFunc float "pow"
+  sin   = unaryFunc float "sin"
+  cos   = unaryFunc float "cos"
+  tan   = unaryFunc float "tan"
+  asin  = unaryFunc float "asin"
+  acos  = unaryFunc float "acos"
+  atan  = unaryFunc float "atan"
+  sinh x = (exp x - exp (-x)) / 2 
+  cosh x = (exp x + exp (-x)) / 2
+  asinh x = log (x + sqrt (x * x + 1))
+  atanh x = log ((1 + x) / (1 - x)) / 2
+  acosh x = log (x + sqrt (x * x - 1))
  
 -- | This class provides the GPU functions either not found in Prelude's numerical classes, or that has wrong types.
 --   Instances are also provided for normal 'Float's and 'Double's.
 --   Minimal complete definition: 'floor'' and 'ceiling''.
-class (Ord a, Floating a) => Real' a where
+class Floating a => Real' a where
   rsqrt :: a -> a
   exp2 :: a -> a
   log2 :: a -> a
@@ -267,93 +203,62 @@ class (Ord a, Floating a) => Real' a where
   rsqrt = (1/) . sqrt
   exp2 = (2**)
   log2 = logBase 2
-  clamp x a = min (max x a)
   saturate x = clamp x 0 1
   mix x y a = x*(1-a)+y*a
-  step a x | x < a     = 0
-           | otherwise = 1
   smoothstep a b x = let t = saturate ((x-a) / (b-a))
                      in t*t*(3-2*t)
   fract' x = x - floor' x
   mod' x y = x - y* floor' (x/y)
   
 instance Real' Float where
+  clamp x a = min (max x a)
+  step a x | x < a     = 0
+           | otherwise = 1
   floor' = fromIntegral . floor
   ceiling' = fromIntegral . ceiling
 
 instance Real' Double where
+  clamp x a = min (max x a)
+  step a x | x < a     = 0
+           | otherwise = 1
   floor' = fromIntegral . floor
   ceiling' = fromIntegral . ceiling
   
-instance Real' (Vertex Float) where
-  rsqrt = vUnaryFunc "float" "inversesqrt"
-  exp2 = vUnaryFunc "float" "exp2"
-  log2 = vUnaryFunc "float" "log2"
-  floor' = vUnaryFunc "float" "floor"
-  ceiling' = vUnaryFunc "float" "ceil"
-  fract' = vUnaryFunc "float" "fract"
-  mod' = vBinaryFunc "float" "mod"
-  clamp = vTernaryFunc "float" "clamp"
-  mix = vTernaryFunc "float" "mix"
-  step = vBinaryFunc "float" "step"
-  smoothstep = vTernaryFunc "float" "smoothstep"
+instance Real' (Shader c Float) where
+  rsqrt = unaryFunc float "inversesqrt"
+  exp2 = unaryFunc float "exp2"
+  log2 = unaryFunc float "log2"
+  floor' = unaryFunc float "floor"
+  ceiling' = unaryFunc float "ceil"
+  fract' = unaryFunc float "fract"
+  mod' = binaryFunc float "mod"
+  clamp = ternaryFunc float "clamp"
+  mix = ternaryFunc float "mix"
+  step = binaryFunc float "step"
+  smoothstep = ternaryFunc float "smoothstep"
   
-instance Real' (Fragment Float) where
-  rsqrt = fUnaryFunc "float" "inversesqrt"
-  exp2 = fUnaryFunc "float" "exp2"
-  log2 = fUnaryFunc "float" "log2"
-  floor' = fUnaryFunc "float" "floor"
-  ceiling' = fUnaryFunc "float" "ceil"
-  fract' = fUnaryFunc "float" "fract"
-  mod' = fBinaryFunc "float" "mod"
-  clamp = fTernaryFunc "float" "clamp"
-  mix = fTernaryFunc  "float" "mix"
-  step = fBinaryFunc "float" "step"
-  smoothstep = fTernaryFunc "float" "smoothstep"
+instance Boolean (Shader c Bool) where
+    true = Shader $ ShaderConstant $ ConstBool True
+    false = Shader $ ShaderConstant $ ConstBool False
+    notB = unaryPreOp bool "!"
+    (&&*) = binaryOp bool "&&"
+    (||*) = binaryOp bool "||"
+instance Eq a => EqB (Shader c Bool) (Shader c a) where
+    (==*) = binaryOp bool "=="
+    (/=*) = binaryOp bool "!="
+instance Ord a => OrdB (Shader c Bool) (Shader c a) where
+    (<*) = binaryOp bool "<"
+    (>=*) = binaryOp bool ">="
+    (>*) = binaryOp bool ">"
+    (<=*) = binaryOp bool "<="
 
-instance Boolean (Vertex Bool) where
-    true = Vertex $ ShaderConstant $ ConstBool True
-    false = Vertex $ ShaderConstant $ ConstBool False
-    notB = vUnaryPreOp "bool" "!"
-    (&&*) = vBinaryOp "bool" "&&"
-    (||*) = vBinaryOp "bool" "||"
-instance Boolean (Fragment Bool) where
-    true = Fragment $ ShaderConstant $ ConstBool True
-    false = Fragment $ ShaderConstant $ ConstBool False
-    notB = fUnaryPreOp "bool" "!"
-    (&&*) = fBinaryOp "bool" "&&"
-    (||*) = fBinaryOp "bool" "||"
-instance Eq a => EqB (Vertex Bool) (Vertex a) where
-    (==*) = vBinaryOp "bool" "=="
-    (/=*) = vBinaryOp "bool" "!="
-instance Eq a => EqB (Fragment Bool) (Fragment a) where
-    (==*) = fBinaryOp "bool" "=="
-    (/=*) = fBinaryOp "bool" "!="
-instance Ord a => OrdB (Vertex Bool) (Vertex a) where
-    (<*) = vBinaryOp "bool" "<"
-    (>=*) = vBinaryOp "bool" ">="
-    (>*) = vBinaryOp "bool" ">"
-    (<=*) = vBinaryOp "bool" "<="
-instance Ord a => OrdB (Fragment Bool) (Fragment a) where
-    (<*) = fBinaryOp "bool" "<"
-    (>=*) = fBinaryOp "bool" ">="
-    (>*) = fBinaryOp "bool" ">"
-    (<=*) = fBinaryOp "bool" "<="
-
-instance IfB (Vertex Bool) (Vertex Int) where
-    ifB c a b = Vertex $ ShaderOp "if" (assign "int" (\[a,b,c]->a++"?"++b++":"++c)) [fromVertex c,fromVertex a,fromVertex b]
-instance IfB (Vertex Bool) (Vertex Float) where
-    ifB c a b = Vertex $ ShaderOp "if" (assign "float" (\[a,b,c]->a++"?"++b++":"++c)) [fromVertex c,fromVertex a,fromVertex b]
-instance IfB (Vertex Bool) (Vertex Bool) where
-    ifB c a b = Vertex $ ShaderOp "if" (assign "bool" (\[a,b,c]->a++"?"++b++":"++c)) [fromVertex c,fromVertex a,fromVertex b]
+instance IfB (Shader c Bool) (Shader c Int) where
+    ifB c a b = Shader $ ShaderOp "if" (assign int (\[a,b,c]->a++"?"++b++":"++c)) [fromS c,fromS a,fromS b]
+instance IfB (Shader c Bool) (Shader c Float) where
+    ifB c a b = Shader $ ShaderOp "if" (assign float (\[a,b,c]->a++"?"++b++":"++c)) [fromS c,fromS a,fromS b]
+instance IfB (Shader c Bool) (Shader c Bool) where
+    ifB c a b = Shader $ ShaderOp "if" (assign bool (\[a,b,c]->a++"?"++b++":"++c)) [fromS c,fromS a,fromS b]
     
-instance IfB (Fragment Bool) (Fragment Int) where
-    ifB c a b = Fragment $ ShaderOp "if" (assign "int" (\[a,b,c]->a++"?"++b++":"++c)) [fromFragment c,fromFragment a,fromFragment b]
-instance IfB (Fragment Bool) (Fragment Float) where
-    ifB c a b = Fragment $ ShaderOp "if" (assign "float" (\[a,b,c]->a++"?"++b++":"++c)) [fromFragment c,fromFragment a,fromFragment b]
-instance IfB (Fragment Bool) (Fragment Bool) where
-    ifB c a b = Fragment $ ShaderOp "if" (assign "bool" (\[a,b,c]->a++"?"++b++":"++c)) [fromFragment c,fromFragment a,fromFragment b]
-
 -- | Provides a common way to convert numeric types to integer and floating point representations.
 class Convert a where
     type ConvertFloat a
@@ -373,25 +278,15 @@ instance Convert Int where
     type ConvertInt Int = Int
     toFloat = fromIntegral
     toInt = id
-instance Convert (Vertex Float) where
-    type ConvertFloat (Vertex Float) = Vertex Float
-    type ConvertInt (Vertex Float) = Vertex Int
+instance Convert (Shader c Float) where
+    type ConvertFloat (Shader c Float) = Shader c Float
+    type ConvertInt (Shader c Float) = Shader c Int
     toFloat = id
-    toInt = vUnaryFunc "int" "int"
-instance Convert (Vertex Int) where
-    type ConvertFloat (Vertex Int) = Vertex Float
-    type ConvertInt (Vertex Int) = Vertex Int
-    toFloat = vUnaryFunc "float" "float"
-    toInt = id
-instance Convert (Fragment Float) where
-    type ConvertFloat (Fragment Float) = Fragment Float
-    type ConvertInt (Fragment Float) = Fragment Int
-    toFloat = id
-    toInt = fUnaryFunc "int" "int"
-instance Convert (Fragment Int) where
-    type ConvertFloat (Fragment Int) = Fragment Float
-    type ConvertInt (Fragment Int) = Fragment Int
-    toFloat = fUnaryFunc "float" "float"
+    toInt = unaryFunc int int
+instance Convert (Shader c Int) where
+    type ConvertFloat (Shader c Int) = Shader c Float
+    type ConvertInt (Shader c Int) = Shader c Int
+    toFloat = unaryFunc float float
     toInt = id
     
 -- | The derivative in x using local differencing of the rasterized value.
@@ -400,9 +295,9 @@ dFdx :: Fragment Float -> Fragment Float
 dFdy :: Fragment Float -> Fragment Float
 -- | The sum of the absolute derivative in x and y using local differencing of the rasterized value.
 fwidth :: Fragment Float -> Fragment Float
-dFdx = fUnaryFunc "float" "dFdx"
-dFdy = fUnaryFunc "float" "dFdy"
-fwidth = fUnaryFunc "float" "fwidth"
+dFdx = unaryFunc float "dFdx"
+dFdy = unaryFunc float "dFdy"
+fwidth = unaryFunc float "fwidth"
 
 --------------------------------------
 -- Vector specializations
@@ -410,72 +305,48 @@ fwidth = fUnaryFunc "float" "fwidth"
 {-# RULES "norm/F4" norm = normF4 #-}
 {-# RULES "norm/F3" norm = normF3 #-}
 {-# RULES "norm/F2" norm = normF2 #-}
-normF4 :: Vec4 (Fragment Float) -> Fragment Float
-normF4 = fUnaryFunc "float" "length" . fFromVec "vec4"
-normF3 :: Vec3 (Fragment Float) -> Fragment Float
-normF3 = fUnaryFunc "float" "length" . fFromVec "vec3"
-normF2 :: Vec2 (Fragment Float) -> Fragment Float
-normF2 = fUnaryFunc "float" "length" . fFromVec "vec2"
-{-# RULES "norm/V4" norm = normV4 #-}
-{-# RULES "norm/V3" norm = normV3 #-}
-{-# RULES "norm/V2" norm = normV2 #-}
-normV4 :: Vec4 (Vertex Float) -> Vertex Float
-normV4 = vUnaryFunc "float" "length" . vFromVec "vec4"
-normV3 :: Vec3 (Vertex Float) -> Vertex Float
-normV3 = vUnaryFunc "float" "length" . vFromVec "vec3"
-normV2 :: Vec2 (Vertex Float) -> Vertex Float
-normV2 = vUnaryFunc "float" "length" . vFromVec "vec3"
+normF4 :: Vec4 (Shader c  Float) -> Shader c  Float
+normF4 = unaryFunc float "length" . fromVec "vec4"
+normF3 :: Vec3 (Shader c  Float) -> Shader c  Float
+normF3 = unaryFunc float "length" . fromVec "vec3"
+normF2 :: Vec2 (Shader c  Float) -> Shader c  Float
+normF2 = unaryFunc float "length" . fromVec "vec2"
 
 {-# RULES "normalize/F4" normalize = normalizeF4 #-}
 {-# RULES "normalize/F3" normalize = normalizeF3 #-}
 {-# RULES "normalize/F2" normalize = normalizeF2 #-}
-normalizeF4 :: Vec4 (Fragment Float) -> Vec4 (Fragment Float)
-normalizeF4 = fToVec "float" 4 . fUnaryFunc "vec4" "normalize" . fFromVec "vec4"
-normalizeF3 :: Vec3 (Fragment Float) -> Vec3 (Fragment Float)
-normalizeF3 = fToVec "float" 3 . fUnaryFunc "vec3" "normalize" . fFromVec "vec3"
-normalizeF2 :: Vec2 (Fragment Float) -> Vec2 (Fragment Float)
-normalizeF2 = fToVec "float" 2 . fUnaryFunc "vec2" "normalize" . fFromVec "vec2"
-{-# RULES "normalize/V4" normalize = normalizeV4 #-}
-{-# RULES "normalize/V3" normalize = normalizeV3 #-}
-{-# RULES "normalize/V2" normalize = normalizeV2 #-}
-normalizeV4 :: Vec4 (Vertex Float) -> Vec4 (Vertex Float)
-normalizeV4 = vToVec "float" 4 . vUnaryFunc "vec4" "normalize" . vFromVec "vec4"
-normalizeV3 :: Vec3 (Vertex Float) -> Vec3 (Vertex Float)
-normalizeV3 = vToVec "float" 3 . vUnaryFunc "vec3" "normalize" . vFromVec "vec3"
-normalizeV2 :: Vec2 (Vertex Float) -> Vec2 (Vertex Float)
-normalizeV2 = vToVec "float" 2 . vUnaryFunc "vec2" "normalize" . vFromVec "vec2"
+normalizeF4 :: Vec4 (Shader c  Float) -> Vec4 (Shader c  Float)
+normalizeF4 = toVec float 4 . unaryFunc "vec4" "normalize" . fromVec "vec4"
+normalizeF3 :: Vec3 (Shader c  Float) -> Vec3 (Shader c  Float)
+normalizeF3 = toVec float 3 . unaryFunc "vec3" "normalize" . fromVec "vec3"
+normalizeF2 :: Vec2 (Shader c  Float) -> Vec2 (Shader c  Float)
+normalizeF2 = toVec float 2 . unaryFunc "vec2" "normalize" . fromVec "vec2"
 
 {-# RULES "dot/F4" dot = dotF4 #-}
 {-# RULES "dot/F3" dot = dotF3 #-}
 {-# RULES "dot/F2" dot = dotF2 #-}
-dotF4 :: Vec4 (Fragment Float) -> Vec4 (Fragment Float) -> Fragment Float
-dotF4 a b = fBinaryFunc "float" "dot" (fFromVec "vec4" a) (fFromVec "vec4" b)
-dotF3 :: Vec3 (Fragment Float) -> Vec3 (Fragment Float) -> Fragment Float
-dotF3 a b = fBinaryFunc "float" "dot" (fFromVec "vec3" a) (fFromVec "vec3" b)
-dotF2 :: Vec2 (Fragment Float) -> Vec2 (Fragment Float) -> Fragment Float
-dotF2 a b = fBinaryFunc "float" "dot" (fFromVec "vec2" a) (fFromVec "vec2" b)
-{-# RULES "dot/V4" dot = dotV4 #-}
-{-# RULES "dot/V3" dot = dotV3 #-}
-{-# RULES "dot/V2" dot = dotV2 #-}
-dotV4 :: Vec4 (Vertex Float) -> Vec4 (Vertex Float) -> Vertex Float
-dotV4 a b = vBinaryFunc "float" "dot" (vFromVec "vec4" a) (vFromVec "vec4" b)
-dotV3 :: Vec3 (Vertex Float) -> Vec3 (Vertex Float) -> Vertex Float
-dotV3 a b = vBinaryFunc "float" "dot" (vFromVec "vec3" a) (vFromVec "vec3" b)
-dotV2 :: Vec2 (Vertex Float) -> Vec2 (Vertex Float) -> Vertex Float
-dotV2 a b = vBinaryFunc "float" "dot" (vFromVec "vec2" a) (vFromVec "vec2" b)
+dotF4 :: Vec4 (Shader c  Float) -> Vec4 (Shader c  Float) -> Shader c  Float
+dotF4 a b = binaryFunc float "dot" (fromVec "vec4" a) (fromVec "vec4" b)
+dotF3 :: Vec3 (Shader c  Float) -> Vec3 (Shader c  Float) -> Shader c  Float
+dotF3 a b = binaryFunc float "dot" (fromVec "vec3" a) (fromVec "vec3" b)
+dotF2 :: Vec2 (Shader c  Float) -> Vec2 (Shader c  Float) -> Shader c  Float
+dotF2 a b = binaryFunc float "dot" (fromVec "vec2" a) (fromVec "vec2" b)
 
 {-# RULES "cross/F3" cross = crossF3 #-}
-crossF3 :: Vec3 (Fragment Float) -> Vec3 (Fragment Float) -> Vec3 (Fragment Float)
-crossF3 a b = fToVec "float" 3 $ fBinaryFunc "vec3" "cross" (fFromVec "vec3" a) (fFromVec "vec3" b)
-{-# RULES "cross/V3" cross = crossV3 #-}
-crossV3 :: Vec3 (Vertex Float) -> Vec3 (Vertex Float) ->Vec3 (Vertex Float)
-crossV3 a b = vToVec "float" 3 $ vBinaryFunc "vec3" "cross" (vFromVec "vec3" a) (vFromVec "vec3" b)
+crossF3 :: Vec3 (Shader c  Float) -> Vec3 (Shader c  Float) -> Vec3 (Shader c  Float)
+crossF3 a b = toVec float 3 $ binaryFunc "vec3" "cross" (fromVec "vec3" a) (fromVec "vec3" b)
+
+
+{-# RULES "minB/F" minB = minS #-}
+{-# RULES "maxB/F" maxB = maxS #-}
+minS :: Shader a Float -> Shader a Float -> Shader a Float 
+minS = binaryFunc float "min"
+maxS :: Shader a Float -> Shader a Float -> Shader a Float 
+maxS = binaryFunc float "max"
 
 --------------------------------------
 -- Private
 --
-noFun :: String -> a
-noFun = error . (++ ": No overloading for Vertex/Fragment")
 
 setVaryings xs = setVaryings' 0 $ map (('t':) . show) xs
     where 
@@ -488,9 +359,9 @@ inoutDecls t n i = inoutDecls' i 0
                           | otherwise = t ++ " " ++ tName' i ++ " " ++ n ++ show x ++ ";\n"
           
 uniformDecls :: String -> UniformSet -> String
-uniformDecls p (f,i,b,s) = makeU "float" "f" (length f) ++
-                           makeU "int" "i" (length i) ++
-                           makeU "bool" "b" (length b) ++
+uniformDecls p (f,i,b,s) = makeU float "f" (length f) ++
+                           makeU int "i" (length i) ++
+                           makeU bool "b" (length b) ++
                            concatMap (\(t,xs) -> makeU (sampName t) ('s':show (fromEnum t)) (length xs)) (Map.toList s)
     where makeU t n 0 = ""
           makeU t n i = "uniform " ++ t ++ " " ++ p ++ "u" ++ n ++ "[" ++ show i ++ "];\n"
@@ -550,16 +421,16 @@ extractInputs (_,xs) = IntSet.toAscList $ foldl' extractIn IntSet.empty $ map fs
 
 getCodeAssignments :: (Int -> Int) -> Int -> String -> ShaderDAG -> String
 getCodeAssignments inF numIns inName (_,xs) = concat $ snd $ mapAccumL getCode ((0,0,0,Map.empty),Map.empty) $ zip [0..] xs
-    where getCode ((f,i,b,s),inlns) (n, (ShaderUniform (UniformFloat _), _)) = (((f+1,i,b,s),inlns), assign "float" (const $ inName ++ "uf[" ++ show f ++ "]") (var n) [])
-          getCode ((f,i,b,s),inlns) (n, (ShaderUniform (UniformInt _), _)) = (((f,i+1,b,s),inlns), assign "int" (const $ inName ++ "ui[" ++ show i ++ "]") (var n) [])
-          getCode ((f,i,b,s),inlns) (n, (ShaderUniform (UniformBool _), _)) = (((f,i,b+1,s),inlns), assign "bool" (const $ inName ++ "ub[" ++ show b ++ "]") (var n) [])
+    where getCode ((f,i,b,s),inlns) (n, (ShaderUniform (UniformFloat _), _)) = (((f+1,i,b,s),inlns), assign float (const $ inName ++ "uf[" ++ show f ++ "]") (var n) [])
+          getCode ((f,i,b,s),inlns) (n, (ShaderUniform (UniformInt _), _)) = (((f,i+1,b,s),inlns), assign int (const $ inName ++ "ui[" ++ show i ++ "]") (var n) [])
+          getCode ((f,i,b,s),inlns) (n, (ShaderUniform (UniformBool _), _)) = (((f,i,b+1,s),inlns), assign bool (const $ inName ++ "ub[" ++ show b ++ "]") (var n) [])
           getCode ((f,i,b,s),inlns) (n, (ShaderUniform (UniformSampler t _ _), _)) =
                 case first (fromMaybe 0) $ Map.insertLookupWithKey (const $ const (+1)) t 1 s of
                     (x, s') -> (((f,i,b,s'),Map.insert n (inName ++ "us" ++ show (fromEnum t) ++ "[" ++ show x ++ "]") inlns), "") 
-          getCode x (n, (ShaderConstant (ConstFloat f), _)) = (x, assign "float" (const $ show f) (var n) [])
-          getCode x (n, (ShaderConstant (ConstInt i), _)) = (x, assign "int" (const $ show i) (var n) [])
-          getCode x (n, (ShaderConstant (ConstBool b), _)) = (x, assign "bool" (const $ if b then "true" else "false") (var n) [])
-          getCode x (n, (ShaderInput i, _)) = (x, assign "float" (const $ inName ++ inoutAccessor (inF i) numIns) (var n) [])
+          getCode x (n, (ShaderConstant (ConstFloat f), _)) = (x, assign float (const $ show f) (var n) [])
+          getCode x (n, (ShaderConstant (ConstInt i), _)) = (x, assign int (const $ show i) (var n) [])
+          getCode x (n, (ShaderConstant (ConstBool b), _)) = (x, assign bool (const $ if b then "true" else "false") (var n) [])
+          getCode x (n, (ShaderInput i, _)) = (x, assign float (const $ inName ++ inoutAccessor (inF i) numIns) (var n) [])
           getCode x@(_,inlns) (n, (ShaderOp _ f _, xs)) = (x, f (var n) (map (varMaybeInline inlns) xs))
           getCode _ (_, (ShaderInputTree _, _)) = error "Shader.getCodeAssignments: Use splitShaders first!"
           var n = 't' : show n
@@ -573,7 +444,7 @@ sampName Sampler1D = "sampler1D"
 sampName SamplerCube = "samplerCube"
 
 tName v = tName' $ Vec.length v
-tName' 1 = "float"
+tName' 1 = float
 tName' x = "vec" ++ show x
 
 assign :: String -> ([String] -> String) -> String -> [String] -> String
@@ -584,21 +455,15 @@ binFunc s = head . binFunc'
         binFunc' (a:b:xs) = binFunc' $ (s ++ "(" ++ a ++ "," ++ b ++ ")"):binFunc' xs
         binFunc' x = x
 
-vBinaryOp t s a b = Vertex $ ShaderOp s (assign t (intercalate s)) [fromVertex a, fromVertex b]
-vUnaryPreOp t s a = Vertex $ ShaderOp s (assign t ((s ++) . head)) [fromVertex a]
-vUnaryPostOp t s a = Vertex $ ShaderOp s (assign t ((++ s) . head)) [fromVertex a]
-vUnaryFunc t s a = Vertex $ ShaderOp s (assign t (((s ++ "(") ++) . (++ ")") . head)) [fromVertex a]
-vBinaryFunc t s a b = Vertex $ ShaderOp s (assign t (binFunc s)) [fromVertex a, fromVertex b]
-vTernaryFunc t s a b c = Vertex $ ShaderOp s (assign t (\[a,b,c]->s++"("++a++","++b++","++c++")")) [fromVertex a, fromVertex b, fromVertex c]
-vFromVec t = Vertex . ShaderOp "" (assign t (((t ++ "(") ++) . (++ ")") . intercalate ",")) . map fromVertex . Vec.toList 
-vToVec t n a = Vec.fromList $ map (\s -> Vertex $ ShaderOp s (assign t (\[x]->x++"["++s++"]")) [fromVertex a]) [show n' | n' <-[0..n - 1]]
+binaryOp t s a b = Shader $ ShaderOp s (assign t (intercalate s)) [fromS a, fromS b]
+unaryPreOp t s a = Shader $ ShaderOp s (assign t ((s ++) . head)) [fromS a]
+unaryPostOp t s a = Shader $ ShaderOp s (assign t ((++ s) . head)) [fromS a]
+unaryFunc t s a = Shader $ ShaderOp s (assign t (((s ++ "(") ++) . (++ ")") . head)) [fromS a]
+binaryFunc t s a b = Shader $ ShaderOp s (assign t (binFunc s)) [fromS a, fromS b]
+ternaryFunc t s a b c = Shader $ ShaderOp s (assign t (\[a,b,c]->s++"("++a++","++b++","++c++")")) [fromS a, fromS b, fromS c]
+fromVec t = Shader . ShaderOp "" (assign t (((t ++ "(") ++) . (++ ")") . intercalate ",")) . map fromS . Vec.toList 
+toVec t n a = Vec.fromList $ map (\s -> Shader $ ShaderOp s (assign t (\[x]->x++"["++s++"]")) [fromS a]) [show n' | n' <-[0..n - 1]]
 
-fBinaryOp t s a b = Fragment $ ShaderOp s (assign t (intercalate s)) [fromFragment a, fromFragment b]
-fUnaryPreOp t s a = Fragment $ ShaderOp s (assign t ((s ++) . head)) [fromFragment a]
-fUnaryPostOp t s a = Fragment $ ShaderOp s (assign t ((++ s) . head)) [fromFragment a]
-fUnaryFunc t s a = Fragment $ ShaderOp s (assign t (((s ++ "(") ++) . (++ ")") . head)) [fromFragment a]
-fBinaryFunc t s a b = Fragment $ ShaderOp s (assign t (binFunc s)) [fromFragment a, fromFragment b]
-fTernaryFunc t s a b c = Fragment $ ShaderOp s (assign t (\[a,b,c]->s++"("++a++","++b++","++c++")")) [fromFragment a, fromFragment b, fromFragment c]
-fFromVec t = Fragment . ShaderOp "" (assign t (((t ++ "(") ++) . (++ ")") . intercalate ",")) . map fromFragment . Vec.toList 
-fToVec t n a = Vec.fromList $ map (\s -> Fragment $ ShaderOp s (assign t (\[x]->x++"["++s++"]")) [fromFragment a]) [show n' | n' <-[0..n - 1]]
-
+float = "float"
+int = "int"
+bool = "bool"
