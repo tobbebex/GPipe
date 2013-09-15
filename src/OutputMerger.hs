@@ -402,7 +402,7 @@ getFrameBufferStencil f s@(w:.h:.()) fb p = do
     runFrameBufferInContext cache s fb
     readPixels (Position 0 0) (Size (fromIntegral w) (fromIntegral h)) (PixelData StencilIndex (toGLDataType f) p)
 
--- | Cretes and shows a new GPipe window. Use the last parameter to add extra GLUT callbacks to the window. Note that you can't register your own 'displayCallback' and 'reshapeCallback'.
+-- | Creates and shows a new GPipe window. Use the last parameter to add extra GLUT callbacks to the window. Note that you can't register your own 'displayCallback' and 'reshapeCallback'.
 newWindow :: String     -- ^ The window title
           -> Vec2 Int   -- ^ The window position
           -> Vec2 Int   -- ^ The window size
