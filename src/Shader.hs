@@ -30,6 +30,7 @@ module Shader (
     dFdx,
     dFdy,
     fwidth,
+    fragDepth,
     sampleBinFunc,
     sampleTernFunc,
     module Data.Boolean

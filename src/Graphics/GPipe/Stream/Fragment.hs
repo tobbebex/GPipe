@@ -44,6 +44,7 @@ module Graphics.GPipe.Stream.Fragment (
     dFdy,
     fwidth,
     filterFragments,
+    fragDepth,
 
     -- * Creating fragment streams
     VertexOutput(..),
