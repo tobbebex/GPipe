@@ -30,6 +30,7 @@ module Shader (
     dFdx,
     dFdy,
     fwidth,
+    fragDepth,
     sampleBinFunc,
     sampleTernFunc,
     module Data.Boolean
@@ -295,9 +296,13 @@ dFdx :: Fragment Float -> Fragment Float
 dFdy :: Fragment Float -> Fragment Float
 -- | The sum of the absolute derivative in x and y using local differencing of the rasterized value.
 fwidth :: Fragment Float -> Fragment Float
+-- | The local fragment depth value
+fragDepth :: Fragment Float
+
 dFdx = unaryFunc float "dFdx"
 dFdy = unaryFunc float "dFdy"
 fwidth = unaryFunc float "fwidth"
+fragDepth = shaderVar float "gl_FragCoord.z"
 
 --------------------------------------
 -- Vector specializations
@@ -463,6 +468,7 @@ binaryFunc t s a b = Shader $ ShaderOp s (assign t (binFunc s)) [fromS a, fromS 
 ternaryFunc t s a b c = Shader $ ShaderOp s (assign t (\[a,b,c]->s++"("++a++","++b++","++c++")")) [fromS a, fromS b, fromS c]
 fromVec t = Shader . ShaderOp "" (assign t (((t ++ "(") ++) . (++ ")") . intercalate ",")) . map fromS . Vec.toList 
 toVec t n a = Vec.fromList $ map (\s -> Shader $ ShaderOp s (assign t (\[x]->x++"["++s++"]")) [fromS a]) [show n' | n' <-[0..n - 1]]
+shaderVar t s = Shader $ ShaderOp s (assign t (const s)) []
 
 float = "float"
 int = "int"
