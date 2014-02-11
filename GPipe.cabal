@@ -1,5 +1,5 @@
 name: GPipe
-version: 1.4.2
+version: 1.4.3
 cabal-version: >= 1.8
 build-type: Simple
 license: BSD3
@@ -24,14 +24,14 @@ author: Tobias Bexelius
 
 Library
     build-depends: 
-                    containers >= 0.4 && <0.5,
-                    list-tries >= 0.4.1 && < 0.5,
-                    GLUT == 2.3.0.0,
-                    OpenGL == 2.5.0.0,
-                    Boolean == 0.0.1,
-                    Vec == 1.0.1,
-                    Vec-Boolean == 1.0.6,
-                    base >= 4 && <5,
+                    containers  >= 0.4   && <0.6,
+                    list-tries  >= 0.4.1 && <0.6,
+                    GLUT        >= 2.3.0 && <2.6,
+                    OpenGL      >= 2.5.0 && <3.0,
+                    Boolean     >= 0.0.1 && <1.0,
+                    Vec         >= 1.0.1 && <2.0,
+                    Vec-Boolean >= 1.0.6 && <2.0,
+                    base        >= 4     && <5,
                     transformers
                        
     other-modules: 
