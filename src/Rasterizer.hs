@@ -82,7 +82,7 @@ rasterizeFront x = case x of
 
 -- | Rasterize both sides of triangles with vertices containing canonical view coordinates into fragments, also returning the primitives side in the fragments.    
 rasterizeFrontAndBack :: VertexOutput a
-                      => PrimitiveStream Triangle (VertexPosition, a) -- ^ The primitive stream with vertices containing canonical view coordinates and data to be interpolated.
+                      => PrimitiveStream p (VertexPosition, a) -- ^ The primitive stream with vertices containing canonical view coordinates and data to be interpolated.
                       -> FragmentStream (Fragment Bool, FragmentInput a) -- ^ The resulting fragment stream with fragments containing a bool saying if the primitive was front facing and the interpolated values.
 rasterizeFrontAndBack x = case x of 
         (PrimitiveStreamShader xs) -> FragmentStream $ map rasterizeOne xs
@@ -92,7 +92,7 @@ rasterizeFrontAndBack x = case x of
 
 -- | Rasterize back side of triangles with vertices containing canonical view coordinates into fragments.    
 rasterizeBack :: VertexOutput a
-              => PrimitiveStream Triangle (VertexPosition, a)  -- ^ The primitive stream with vertices containing canonical view coordinates and data to be interpolated.
+              => PrimitiveStream p (VertexPosition, a)  -- ^ The primitive stream with vertices containing canonical view coordinates and data to be interpolated.
               -> FragmentStream  (FragmentInput a) -- ^ The resulting fragment stream with fragments containing the interpolated values.
 rasterizeBack x = case x of
         (PrimitiveStreamShader xs) -> FragmentStream $ map rasterizeOne xs
