@@ -46,7 +46,7 @@ import Data.Maybe
 import Data.Boolean
 import Data.Map (Map)
 import qualified Data.Map as Map hiding (Map)
-import qualified Data.HashTable as HT
+import qualified Data.HashTable.IO as HT
 import Control.Exception (evaluate)
 import System.Mem.StableName
 import Data.IntSet (IntSet)
@@ -237,6 +237,8 @@ instance Real' (Shader c Float) where
   mix = ternaryFunc float "mix"
   step = binaryFunc float "step"
   smoothstep = ternaryFunc float "smoothstep"
+
+type instance BooleanOf (Shader c a) = (Shader c Bool)
   
 instance Boolean (Shader c Bool) where
     true = Shader $ ShaderConstant $ ConstBool True
@@ -244,20 +246,20 @@ instance Boolean (Shader c Bool) where
     notB = unaryPreOp bool "!"
     (&&*) = binaryOp bool "&&"
     (||*) = binaryOp bool "||"
-instance Eq a => EqB (Shader c Bool) (Shader c a) where
+instance Eq a => EqB (Shader c a) where
     (==*) = binaryOp bool "=="
     (/=*) = binaryOp bool "!="
-instance Ord a => OrdB (Shader c Bool) (Shader c a) where
+instance Ord a => OrdB (Shader c a) where
     (<*) = binaryOp bool "<"
     (>=*) = binaryOp bool ">="
     (>*) = binaryOp bool ">"
     (<=*) = binaryOp bool "<="
 
-instance IfB (Shader c Bool) (Shader c Int) where
+instance IfB (Shader c Int) where
     ifB c a b = Shader $ ShaderOp "if" (assign int (\[a,b,c]->a++"?"++b++":"++c)) [fromS c,fromS a,fromS b]
-instance IfB (Shader c Bool) (Shader c Float) where
+instance IfB (Shader c Float) where
     ifB c a b = Shader $ ShaderOp "if" (assign float (\[a,b,c]->a++"?"++b++":"++c)) [fromS c,fromS a,fromS b]
-instance IfB (Shader c Bool) (Shader c Bool) where
+instance IfB (Shader c Bool) where
     ifB c a b = Shader $ ShaderOp "if" (assign bool (\[a,b,c]->a++"?"++b++":"++c)) [fromS c,fromS a,fromS b]
     
 -- | Provides a common way to convert numeric types to integer and floating point representations.
@@ -392,9 +394,9 @@ splitShaders (a,xs) = case mapAccumL splitNode [] xs of (trees, xs2) -> (reverse
 
 createDAG :: [ShaderTree] -> ShaderDAG
 createDAG = second reverse . unsafePerformIO . startDAG
-    where startDAG xs = do ht <- HT.new (==) (fromIntegral . hashStableName)
+    where startDAG xs = do ht <- HT.new
                            runStateT (mapM (createDAG' ht) xs) []
-          createDAG' :: HT.HashTable (StableName ShaderTree) Int -> ShaderTree -> StateT [(ShaderTree, [Int])] IO Int
+          createDAG' :: HT.BasicHashTable (StableName ShaderTree) Int -> ShaderTree -> StateT [(ShaderTree, [Int])] IO Int
           createDAG' ht n = do n' <- liftIO $ evaluate n -- To make makeStableName "stable"
                                k <- liftIO $ makeStableName n'
                                m <- liftIO $ HT.lookup ht k

@@ -1,3 +1,4 @@
+{-# LANGUAGE RankNTypes #-}
 -----------------------------------------------------------------------------
 --
 -- Module      :  Resources
@@ -32,7 +33,6 @@ module Resources (
     hiddenWindowContextCache,
     WinMappedTexture,
     newWinMappedTexture,
-    bindWinMappedTexture,
     Sampler(..),
     Filter(..),
     EdgeMode(..),
@@ -53,31 +53,37 @@ module Resources (
     Uniform(..)
 ) where
 
-import Graphics.Rendering.OpenGL hiding (Sampler3D, Sampler2D, Sampler1D, SamplerCube, Point, Linear, Clamp, Uniform)
-import qualified Data.HashTable as HT
-import qualified Graphics.UI.GLUT as GLUT
-import Data.Map (Map)
-import qualified Data.Map as Map
-import System.Mem.StableName
-import Data.Bits
-import Control.Monad
-import Foreign.C.Types
-import Foreign.Storable
-import Foreign.Marshal
-import Data.List
-import Data.Maybe
-import Foreign.Ptr
-import System.IO.Unsafe (unsafePerformIO)
-import Data.IORef
-import Control.Exception (evaluate)
-import Foreign.ForeignPtr
-import System.Mem.Weak (addFinalizer)
-import Data.Unique
-import Data.ListTrie.Patricia.Map (TrieMap)
-import qualified Data.ListTrie.Patricia.Map as TrieMap
-import Data.ListTrie.Base.Map (WrappedIntMap)
-import Control.Monad.Trans.Reader
-import Control.Monad.IO.Class
+import           Control.Exception                                    (evaluate)
+import           Control.Monad
+import           Control.Monad.IO.Class
+import           Control.Monad.Trans.Reader
+import           Data.Bits
+import qualified Data.HashTable.IO                                    as HT
+import           Data.IORef
+import           Data.List
+import           Data.ListTrie.Base.Map                               (WrappedIntMap)
+import           Data.ListTrie.Patricia.Map                           (TrieMap)
+import qualified Data.ListTrie.Patricia.Map                           as TrieMap
+import           Data.Map                                             (Map)
+import qualified Data.Map                                             as Map
+import           Data.Maybe
+import           Data.Unique
+import           Foreign.C.Types
+import           Foreign.ForeignPtr
+import           Foreign.Marshal
+import           Foreign.Ptr
+import           Foreign.Storable
+import           Graphics.Rendering.OpenGL                            hiding
+                                                                       (Clamp,
+                                                                       Linear,
+                                                                       Point, Sampler1D, Sampler2D, Sampler3D, SamplerCube,
+                                                                       Uniform)
+import           Graphics.Rendering.OpenGL.GL.Shaders.ShaderObjects   (ShaderType, ShaderType (..), ShaderType (..))
+import           Graphics.Rendering.OpenGL.GL.Texturing.Specification (BindableTextureTarget)
+import qualified Graphics.UI.GLUT                                     as GLUT
+import           System.IO.Unsafe                                     (unsafePerformIO)
+import           System.Mem.StableName
+import           System.Mem.Weak                                      (addFinalizer)
 
 data VertexBuffer = VertexBuffer BufferObject Int
 data IndexBuffer = IndexBuffer BufferObject Int DataType
@@ -88,7 +94,7 @@ type UniformSet = ([Float],[Int],[Bool],Map SamplerType [(Sampler, WinMappedText
 
 type ShaderInfo = (ShaderKey, String, UniformSet)
 type ShaderKey = ([Int], [(ShaderKeyNode, [Int])])
-data ShaderKeyNode = ShaderKeyUniform 
+data ShaderKeyNode = ShaderKeyUniform
                    | ShaderKeyConstant !Const
                    | ShaderKeyInput !Int
                    | ShaderKeyOp !Op
@@ -102,7 +108,7 @@ data Uniform = UniformFloat Float
              | UniformInt Int
              | UniformBool Bool
              | UniformSampler SamplerType Sampler WinMappedTexture
-                    
+
 -- | A structure describing how a texture is sampled
 data Sampler = Sampler Filter EdgeMode deriving (Eq, Ord)
 -- | Filter mode used in sampler state
@@ -123,7 +129,7 @@ type ProgramCacheMap = TrieMap Map (ShaderKeyNode, [Int]) (TrieMap Map (ShaderKe
 type ProgramCache = IORef ProgramCacheMap -- (Map (ShaderKey, ShaderKey) (Program, (UniformLocationSet,UniformLocationSet)))
 pCacheLookup :: ShaderKey -> ShaderKey -> ProgramCacheMap -> Maybe ProgramCacheValue
 pCacheLookup (k3, k1) (k4, k2) m1 = TrieMap.lookup k1 m1 >>= TrieMap.lookup k2 >>= TrieMap.lookup k3 >>= TrieMap.lookup k4
-pCacheInsert :: ShaderKey -> ShaderKey -> ProgramCacheValue -> ProgramCacheMap -> ProgramCacheMap 
+pCacheInsert :: ShaderKey -> ShaderKey -> ProgramCacheValue -> ProgramCacheMap -> ProgramCacheMap
 pCacheInsert (k3, k1) (k4, k2) v = TrieMap.alter' ins2 k1
     where ins2 Nothing   = Just $ TrieMap.singleton k2 $ TrieMap.singleton k3 $ TrieMap.singleton k4 v
           ins2 (Just m2) = Just $ TrieMap.alter' ins3 k2 m2
@@ -131,19 +137,19 @@ pCacheInsert (k3, k1) (k4, k2) v = TrieMap.alter' ins2 k1
           ins3 (Just m3) = Just $ TrieMap.alter' ins4 k3 m3
           ins4 Nothing   = Just $ TrieMap.singleton k4 v
           ins4 (Just m4) = Just $ TrieMap.insert k4 v m4
-          
-type VBCache = HT.HashTable ([Int], StableName [[Float]]) VertexBuffer
-type IBCache = HT.HashTable (StableName [Int]) IndexBuffer
-data ContextCache = ContextCache {programCache :: ProgramCache,
-                                  vbCache :: VBCache,
-                                  ibCache :: IBCache,
-                                  contextWindow :: GLUT.Window,
+
+type VBCache = HT.BasicHashTable ([Int], StableName [[Float]]) VertexBuffer
+type IBCache = HT.BasicHashTable (StableName [Int]) IndexBuffer
+data ContextCache = ContextCache {programCache    :: ProgramCache,
+                                  vbCache         :: VBCache,
+                                  ibCache         :: IBCache,
+                                  contextWindow   :: GLUT.Window,
                                   contextViewPort :: Size}
 newContextCache :: GLUT.Window -> IO ContextCache
 newContextCache w = do
     pc <- newIORef TrieMap.empty
-    vbc <- HT.new (==) (\(a,b) -> HT.hashString (map toEnum a) `xor` HT.hashInt (hashStableName b))
-    ibc <- HT.new (==) (HT.hashInt . hashStableName)
+    vbc <- HT.new
+    ibc <- HT.new
     let cache = ContextCache pc vbc ibc w (Size 0 0)
     saveContextCache cache
     return cache
@@ -152,20 +158,21 @@ setContextWindow :: ContextCacheIO ()
 setContextWindow = do w <- asks contextWindow
                       s <- asks contextViewPort
                       liftIO $ do GLUT.currentWindow $= Just w
-                                  viewport $= (Position 0 0, s)                     
+                                  viewport $= (Position 0 0, s)
 
 
 type ContextCacheIO = ReaderT ContextCache IO
 
-createShaderResource :: Shader s => String -> IO s
-createShaderResource str = do [s] <- genObjectNames 1
-                              -- putStrLn $ "Created shader " ++ show s
-                              shaderSource s $= [str]
-                              compileShader s
-                              b <- get $ compileStatus s
-                              if b then return s
-                                   else do e <- get $ shaderInfoLog s
-                                           error $ e ++ "\nSource:\n\n" ++ str
+createShaderResource :: ShaderType -> String -> IO Shader
+createShaderResource t str = do
+    s <- createShader t
+    -- putStrLn $ "Created shader " ++ show s
+    shaderSource s $= [str]
+    compileShader s
+    b <- get $ compileStatus s
+    if b then return s
+         else do e <- get $ shaderInfoLog s
+                 error $ e ++ "\nSource:\n\n" ++ str
 
 createProgramResource :: ShaderKey -> String -> ShaderKey -> String -> Int -> ContextCacheIO (Program, (UniformLocationSet,UniformLocationSet))
 createProgramResource vkey vstr fkey fstr s = do
@@ -174,11 +181,11 @@ createProgramResource vkey vstr fkey fstr s = do
                                        case pCacheLookup vkey fkey m of
                                             Just p -> return p
                                             Nothing -> liftIO $ do
-                                                 [p] <- genObjectNames 1
+                                                 p <- createProgram
                                                  -- putStrLn $ "Created program " ++ show p
-                                                 vs <- createShaderResource vstr
-                                                 fs <- createShaderResource fstr
-                                                 attachedShaders p $= ([vs],[fs])
+                                                 vs <- createShaderResource VertexShader vstr
+                                                 fs <- createShaderResource FragmentShader fstr
+                                                 attachedShaders p $= [vs,fs]
                                                  mapM_
                                                      (\i -> attribLocation p ('v' : show i) $= AttribLocation i)
                                                      [0..fromIntegral ((s-1) `div` 4)]
@@ -253,7 +260,7 @@ createIndexBuffer xs vs = do cache <- asks ibCache
                                                                     w' <- get GLUT.currentWindow
                                                                     GLUT.currentWindow $= Just w
                                                                     deleteObjectNames [b]
-                                                                    GLUT.currentWindow $= w'  
+                                                                    GLUT.currentWindow $= w'
                                                                     -- putStrLn "Deleted index buffer"
                                                return i
 
@@ -277,14 +284,27 @@ useUniforms (fu,iu,bu,su) (f,i,b,s) = do
             withArray ss $ uniformv (su Map.! t) (fromIntegral $ length ss)
         createSampler w t ((Sampler f e,tex),i) = do
             activeTexture $= TextureUnit i
-            bindWinMappedTexture (target t) w tex t
-            textureFilter (target t) $= toGLFilter f
-            mapM_ (\c -> textureWrapMode (target t) c $= toGLWrap e) [S, T, R]
+            bindWinMappedTexture' t w tex t
+            textureFilter' t $= toGLFilter f
+            mapM_ (\c -> textureWrapMode' t c $= toGLWrap e) [S, T, R]
             return $ TexCoord1 (fromIntegral i::GLint)
-        target Sampler3D = Texture3D
-        target Sampler2D = Texture2D
-        target Sampler1D = Texture1D
-        target SamplerCube = TextureCubeMap
+
+        bindWinMappedTexture' Sampler3D = bindWinMappedTexture Texture3D
+        bindWinMappedTexture' Sampler2D = bindWinMappedTexture Texture2D
+        bindWinMappedTexture' Sampler1D = bindWinMappedTexture Texture1D
+        bindWinMappedTexture' SamplerCube = error "SamplerCube not supported"
+
+        textureFilter' Sampler3D = textureFilter Texture3D
+        textureFilter' Sampler2D = textureFilter Texture2D
+        textureFilter' Sampler1D = textureFilter Texture1D
+        textureFilter' SamplerCube = error "SamplerCube not supported"
+
+        textureWrapMode' Sampler3D = textureWrapMode Texture3D
+        textureWrapMode' Sampler2D = textureWrapMode Texture2D
+        textureWrapMode' Sampler1D = textureWrapMode Texture1D
+        textureWrapMode' SamplerCube = error "SamplerCube not supported"
+
+
 
 useVertexBuffer :: VertexBuffer -> IO ()
 useVertexBuffer (VertexBuffer b s) = do bindBuffer ArrayBuffer $= Just b
@@ -383,7 +403,7 @@ newWinMappedTexture ionew = do
     where
         deleteTexture (w,t) = do GLUT.currentWindow $= Just w
                                  deleteObjectNames [t]
-                                   
+
 bindWinMappedTexture target w ref s  = do
     mtex <- atomicModifyIORef ref (\a -> (a, takeOne a))
     case mtex of
@@ -391,7 +411,7 @@ bindWinMappedTexture target w ref s  = do
         Left (w',t) -> do GLUT.currentWindow $= Just w'
                           textureBinding target $= Just t
                           ft <- get $ textureLevelRange target
-                          f <- get $ textureInternalFormat (Left target) 0
+                          f <- get $ textureInternalFormat target 0
                           swapBytes Unpack $= False
                           lsbFirst Unpack $= False
                           rowLength Unpack $= 0
@@ -434,39 +454,79 @@ bindWinMappedTexture target w ref s  = do
                 tex <- createTexInWin
                 mapM_ (setDataWithSize1D f) $ zip psSize [from..to]
                 return tex
+
+          getDataAndSize3D n = do
+                s@(TextureSize3D x y z) <- get $ textureSize3D Texture3D n
+                fp <- mallocForeignPtrBytes (fromIntegral x * fromIntegral y * fromIntegral z * 4 * sizeOf (undefined :: Float))
+                withForeignPtr fp $ \ p -> getTexImage Texture3D n (PixelData RGBA Float p)
+                return (s,fp)
+          setDataWithSize3D f ((s,fp),n) =
+                withForeignPtr fp $ \ p -> texImage3D Texture3D NoProxy n f s 0 (PixelData RGBA Float p)
+          getDataAndSize2D n = do
+                s@(TextureSize2D x y) <- get $ textureSize2D Texture2D n
+                fp <- mallocForeignPtrBytes (fromIntegral x * fromIntegral y * 4 * sizeOf (undefined :: Float))
+                withForeignPtr fp $ \ p -> getTexImage Texture2D n (PixelData RGBA Float p)
+                return (s,fp)
+          setDataWithSize2D f ((s,fp),n) =
+                withForeignPtr fp $ \ p -> texImage2D Texture2D NoProxy n f s 0 (PixelData RGBA Float p)
+          getDataAndSize1D n = do
+                s@(TextureSize1D x) <- get $ textureSize1D Texture1D n
+                fp <- mallocForeignPtrBytes (fromIntegral x * 4 * sizeOf (undefined :: Float))
+                withForeignPtr fp $ \ p -> getTexImage Texture1D n (PixelData RGBA Float p)
+                return (s,fp)
+          setDataWithSize1D f ((s,fp),n) =
+                withForeignPtr fp $ \ p -> texImage1D Texture1D NoProxy n f s 0 (PixelData RGBA Float p)
+
+cubeMapTargets = [TextureCubeMapPositiveX, TextureCubeMapNegativeX, TextureCubeMapPositiveY, TextureCubeMapNegativeY, TextureCubeMapPositiveZ, TextureCubeMapNegativeZ]
+                
+{--
+bindWinMappedCubeMap w ref s = do
+    mtex <- atomicModifyIORef ref (\a -> (a, takeOne a))
+    case mtex of
+        Right tex -> textureBinding TextureCubeMap $= Just tex
+        Left (w',t) -> do GLUT.currentWindow $= Just w'
+                          textureBinding TextureCubeMap $= Just t
+                          ft <- get $ textureLevelRange TextureCubeMap
+                          f <- get $ textureInternalFormat TextureCubeMapPositiveX 0
+                          swapBytes Unpack $= False
+                          lsbFirst Unpack $= False
+                          rowLength Unpack $= 0
+                          skipRows Unpack $= 0
+                          skipPixels Unpack $= 0
+                          rowAlignment Unpack $= 1  -- Set to no padding
+                          imageHeight Unpack $= 0
+                          skipImages Unpack $= 0
+                          swapBytes Pack $= False
+                          lsbFirst Pack $= False
+                          rowLength Pack $= 0
+                          skipRows Pack $= 0
+                          skipPixels Pack $= 0
+                          rowAlignment Pack $= 1  -- Set to no padding
+                          imageHeight Pack $= 0
+                          skipImages Pack $= 0
+                          tex <- transferTexture s ft f
+                          textureLevelRange TextureCubeMap $= ft
+                          -- putStrLn $ "Transferred texture " ++ show tex
+                          atomicModifyIORef ref (flip (,) () . Map.insertWith (const id) w tex)
+    where takeOne a = case Map.lookup w a of
+                        Nothing -> Left $ Map.elemAt 0 a
+                        Just t -> Right t
+          createTexInWin = do GLUT.currentWindow $= Just w
+                              [tex] <- genObjectNames 1
+                              textureBinding TextureCubeMap $= Just tex
+                              return tex
           transferTexture SamplerCube (from,to) f =  do
                 psSize <- mapM getDataAndSizeCube [(n,side) | n <- [from..to], side <- cubeMapTargets]
                 tex <- createTexInWin
                 mapM_ (setDataWithSizeCube f) $ zip psSize [(n,side) | n <- [from..to], side <- cubeMapTargets]
                 return tex
-
-          getDataAndSize3D n = do
-                s@(TextureSize3D x y z) <- get $ textureSize3D (Left Texture3D) n
-                fp <- mallocForeignPtrBytes (fromIntegral x * fromIntegral y * fromIntegral z * 4 * sizeOf (undefined :: Float))
-                withForeignPtr fp $ \ p -> getTexImage (Left Texture3D) n (PixelData RGBA Float p)
-                return (s,fp)
-          setDataWithSize3D f ((s,fp),n) =
-                withForeignPtr fp $ \ p -> texImage3D NoProxy n f s 0 (PixelData RGBA Float p)
-          getDataAndSize2D n = do
-                s@(TextureSize2D x y) <- get $ textureSize2D (Left Texture2D) n
-                fp <- mallocForeignPtrBytes (fromIntegral x * fromIntegral y * 4 * sizeOf (undefined :: Float))
-                withForeignPtr fp $ \ p -> getTexImage (Left Texture2D) n (PixelData RGBA Float p)
-                return (s,fp)
-          setDataWithSize2D f ((s,fp),n) =
-                withForeignPtr fp $ \ p -> texImage2D Nothing NoProxy n f s 0 (PixelData RGBA Float p)
-          getDataAndSize1D n = do
-                s@(TextureSize1D x) <- get $ textureSize1D (Left Texture1D) n
-                fp <- mallocForeignPtrBytes (fromIntegral x * 4 * sizeOf (undefined :: Float))
-                withForeignPtr fp $ \ p -> getTexImage (Left Texture2D) n (PixelData RGBA Float p)
-                return (s,fp)
-          setDataWithSize1D f ((s,fp),n) =
-                withForeignPtr fp $ \ p -> texImage1D NoProxy n f s 0 (PixelData RGBA Float p)
           getDataAndSizeCube (n,side) = do
-                s@(TextureSize2D x y) <- get $ textureSize2D (Right side) n
+                getTexLevelParameteriNoProxy  
+                s@(TextureSize2D x y) <- get $ cu TextureCubeMapPositiveX n
                 fp <- mallocForeignPtrBytes (fromIntegral x * fromIntegral y * 4 * sizeOf (undefined :: Float))
-                withForeignPtr fp $ \ p -> getTexImage (Right side) n (PixelData RGBA Float p)
+                withForeignPtr fp $ \ p -> getTexImage side n (PixelData RGBA Float p)
                 return (s,fp)
           setDataWithSizeCube f ((s,fp),(n,side)) =
-                withForeignPtr fp $ \ p -> texImage2D (Just side) NoProxy n f s 0 (PixelData RGBA Float p)
+                withForeignPtr fp $ \ p -> texImage2D side NoProxy n f s 0 (PixelData RGBA Float p)
 
-cubeMapTargets = [TextureCubeMapPositiveX, TextureCubeMapNegativeX, TextureCubeMapPositiveY, TextureCubeMapNegativeY, TextureCubeMapPositiveZ, TextureCubeMapNegativeZ]
+--}

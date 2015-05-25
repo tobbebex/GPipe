@@ -156,7 +156,7 @@ instance ColorFormat f => Texture (Texture3D f) where
               let size = GL.TextureSize3D (fromIntegral x) (fromIntegral y) (fromIntegral z)
               GL.textureBinding GL.Texture3D $= Just tex
               mapM_ (\(n, p) -> 
-                GL.texImage3D GL.NoProxy n i' size 0
+                GL.texImage3D GL.Texture3D GL.NoProxy n i' size 0
                 (GL.PixelData (toGLPixelFormat (undefined::f)) (toGLDataType f') p))
                [(i,p) | i<- [0..] | p<- ps']
               GL.textureLevelRange GL.Texture3D $= (0, fromIntegral $ length ps' - 1)
@@ -178,7 +178,7 @@ instance ColorFormat f => Texture (Texture2D f) where
               let size = GL.TextureSize2D (fromIntegral x) (fromIntegral y)
               GL.textureBinding GL.Texture2D $= Just tex
               mapM_ (\(n, p) -> 
-                GL.texImage2D Nothing GL.NoProxy n i' size 0
+                GL.texImage2D GL.Texture2D GL.NoProxy n i' size 0
                 (GL.PixelData (toGLPixelFormat (undefined::f)) (toGLDataType f') p))
                [(i,p) | i<- [0..] | p<- ps']
               GL.textureLevelRange GL.Texture2D $= (0, fromIntegral $ length ps' - 1)
@@ -200,7 +200,7 @@ instance ColorFormat f => Texture (Texture1D f) where
               let size = GL.TextureSize1D (fromIntegral x)
               GL.textureBinding GL.Texture1D $= Just tex
               mapM_ (\(n, p) -> 
-                GL.texImage1D GL.NoProxy n i' size 0
+                GL.texImage1D GL.Texture1D GL.NoProxy n i' size 0
                 (GL.PixelData (toGLPixelFormat (undefined::f)) (toGLDataType f') p))
                [(i,p) | i<- [0..] | p<- ps']
               GL.textureLevelRange GL.Texture1D $= (0, fromIntegral $ length ps' - 1)
@@ -225,7 +225,7 @@ instance ColorFormat f => Texture (TextureCube f) where
                 (\(t,ps'') -> 
                   mapM_
                         (\(n, p) -> 
-                          GL.texImage2D (Just t) GL.NoProxy n i' size 0
+                          GL.texImage2D t GL.NoProxy n i' size 0
                           (GL.PixelData (toGLPixelFormat (undefined::f)) (toGLDataType f') p))
                         [(i,p) | i<- [0..] | p<- ps''])
                   [(t,ps'') | t <- cubeMapTargets | ps'' <- splitIn 6 ps']
@@ -254,7 +254,7 @@ instance ColorFormat f => FromFrameBufferColor (Texture2D f) f where
                   let size = GL.TextureSize2D (fromIntegral x) (fromIntegral y)
                   runFrameBufferInContext cache s fb
                   GL.textureBinding GL.Texture2D $= Just tex
-                  GL.copyTexImage2D Nothing 0 f' (GL.Position 0 0) size 0
+                  GL.copyTexImage2D GL.Texture2D 0 f' (GL.Position 0 0) size 0
                   GL.textureLevelRange GL.Texture2D $= (0, 0)
 instance ColorFormat f => FromFrameBufferColor (Texture1D f) f where
     fromFrameBufferColor f s fb = Texture1D $ unsafePerformIO $ do
@@ -264,7 +264,7 @@ instance ColorFormat f => FromFrameBufferColor (Texture1D f) f where
                   let size = GL.TextureSize1D (fromIntegral x)
                   runFrameBufferInContext cache (x:.1:.()) fb
                   GL.textureBinding GL.Texture1D $= Just tex
-                  GL.copyTexImage1D 0 f' (GL.Position 0 0) size 0
+                  GL.copyTexImage1D GL.Texture1D 0 f' (GL.Position 0 0) size 0
                   GL.textureLevelRange GL.Texture1D $= (0, 0)
 
 -- | The textures that is instances of this class may be created from a 'FrameBuffer's depth buffer.
@@ -282,7 +282,7 @@ instance DepthColorFormat f => FromFrameBufferDepth (Texture2D f) where
                   let size = GL.TextureSize2D (fromIntegral x) (fromIntegral y)
                   runFrameBufferInContext cache s fb
                   GL.textureBinding GL.Texture2D $= Just tex
-                  GL.copyTexImage2D Nothing 0 f' (GL.Position 0 0) size 0
+                  GL.copyTexImage2D GL.Texture2D 0 f' (GL.Position 0 0) size 0
                   GL.textureLevelRange GL.Texture2D $= (0, 0)
 instance DepthColorFormat f => FromFrameBufferDepth (Texture1D f) where
     fromFrameBufferDepth f s fb = Texture1D $ unsafePerformIO $ do
@@ -292,7 +292,7 @@ instance DepthColorFormat f => FromFrameBufferDepth (Texture1D f) where
                   let size = GL.TextureSize1D (fromIntegral x)
                   runFrameBufferInContext cache (x:.1:.()) fb
                   GL.textureBinding GL.Texture1D $= Just tex
-                  GL.copyTexImage1D 0 f' (GL.Position 0 0) size 0
+                  GL.copyTexImage1D GL.Texture1D 0 f' (GL.Position 0 0) size 0
                   GL.textureLevelRange GL.Texture1D $= (0, 0)
 
 -- | Create a 'TextureCube' of a specific format and size from the the color buffers of six framebuffers.
@@ -310,7 +310,7 @@ fromFrameBufferCubeColor f s b0 b1 b2 b3 b4 b5 = TextureCube $ unsafePerformIO $
                   mapM_ (\ (t,io)-> do
                                  io
                                  GL.textureBinding GL.TextureCubeMap $= Just tex
-                                 GL.copyTexImage2D (Just t) 0 f' (GL.Position 0 0) size 0)
+                                 GL.copyTexImage2D t 0 f' (GL.Position 0 0) size 0)
                         [(t,io) | t <- cubeMapTargets | io <- [runFrameBufferInContext cache s b0,
                                                                runFrameBufferInContext cache s b1,
                                                                runFrameBufferInContext cache s b2,
@@ -327,7 +327,7 @@ fromFrameBufferCubeDepth f s b0 b1 b2 b3 b4 b5 = TextureCube $ unsafePerformIO $
                   mapM_ (\ (t,io)-> do
                                  io
                                  GL.textureBinding GL.TextureCubeMap $= Just tex
-                                 GL.copyTexImage2D (Just t) 0 f' (GL.Position 0 0) size 0)
+                                 GL.copyTexImage2D t 0 f' (GL.Position 0 0) size 0)
                         [(t,io) | t <- cubeMapTargets | io <- [runFrameBufferInContext cache s b0,
                                                                runFrameBufferInContext cache s b1,
                                                                runFrameBufferInContext cache s b2,

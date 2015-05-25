@@ -276,14 +276,16 @@ instance ColorFormat RGBAFormat where
     fromColor _ _ (RGBA (a:.b:.c:.()) d) = a:.b:.c:.d:.()
     toColor (a:.b:.c:.d:.()) = RGBA (a:.b:.c:.()) d
 
-instance IfB bool a => IfB bool (Color AlphaFormat a) where
+type instance BooleanOf (Color a b) = BooleanOf b    
+
+instance IfB a => IfB (Color AlphaFormat a) where
     ifB c (Alpha t) (Alpha e) = Alpha (ifB c t e)
-instance IfB bool a => IfB bool (Color LuminanceFormat a) where
+instance IfB a => IfB (Color LuminanceFormat a) where
     ifB c (Luminance t) (Luminance e) = Luminance (ifB c t e)
-instance IfB bool a => IfB bool (Color LuminanceAlphaFormat a) where
+instance IfB a => IfB (Color LuminanceAlphaFormat a) where
     ifB c (LuminanceAlpha t1 t2) (LuminanceAlpha e1 e2) = LuminanceAlpha (ifB c t1 e1) (ifB c t2 e2)
-instance IfB bool a => IfB bool (Color RGBFormat a) where
+instance IfB a => IfB (Color RGBFormat a) where
     ifB c (RGB t) (RGB e) = RGB (ifB c t e)
-instance IfB bool a => IfB bool (Color RGBAFormat a) where
+instance IfB a => IfB (Color RGBAFormat a) where
     ifB c (RGBA t1 t2) (RGBA e1 e2) = RGBA (ifB c t1 e1) (ifB c t2 e2)
     
